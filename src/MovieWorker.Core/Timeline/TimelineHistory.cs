@@ -8,6 +8,8 @@ namespace MovieWorker.Core.Timeline;
 public sealed class TimelineHistory
 {
     private readonly LinkedList<(MovieProject State, string Description)> _undo = new();
+    private string? _lastMergeKey;
+    private DateTime _lastRecordTime;
     private readonly Stack<(MovieProject State, string Description)> _redo = new();
 
     public TimelineHistory(int capacity = 100)
@@ -26,9 +28,22 @@ public sealed class TimelineHistory
 
     public string? RedoDescription => _redo.TryPeek(out var e) ? e.Description : null;
 
-    /// <summary>Merkt sich den Zustand <b>vor</b> einer Änderung.</summary>
-    public void Record(MovieProject before, string description)
+    /// <summary>
+    /// Merkt sich den Zustand <b>vor</b> einer Änderung. Folgen mehrere Änderungen mit demselben
+    /// <paramref name="mergeKey"/> schnell aufeinander (z. B. beim Ziehen eines Reglers), entsteht nur ein Schritt.
+    /// </summary>
+    public void Record(MovieProject before, string description, string? mergeKey = null, DateTime? now = null)
     {
+        var time = now ?? DateTime.UtcNow;
+        var merge = mergeKey is not null && mergeKey == _lastMergeKey && _undo.Count > 0
+            && (time - _lastRecordTime).TotalSeconds < 1.5 && _redo.Count == 0;
+        _lastMergeKey = mergeKey;
+        _lastRecordTime = time;
+        if (merge)
+        {
+            return;
+        }
+
         _undo.AddLast((before.Clone(), description));
         _redo.Clear();
         while (_undo.Count > Capacity)
@@ -39,6 +54,7 @@ public sealed class TimelineHistory
 
     public MovieProject? Undo(MovieProject current)
     {
+        _lastMergeKey = null;
         if (_undo.Last is null)
         {
             return null;
@@ -52,6 +68,7 @@ public sealed class TimelineHistory
 
     public MovieProject? Redo(MovieProject current)
     {
+        _lastMergeKey = null;
         if (!_redo.TryPop(out var entry))
         {
             return null;

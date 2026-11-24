@@ -153,6 +153,51 @@ public static class SmokeTest
         c.Check(vm.Project.AllClips.Count() == clipCount, "Wiederholen");
         c.Check(vm.Project.Media.Count == imported.Count, "Medienpool bleibt bei Rückgängig erhalten");
 
+        // ---- Timeline-Bearbeitung (wie mit Maus und Tastatur)
+        await Settle(800);
+        var timeline = window.TimelineControl;
+        timeline.ZoomToFit();
+        var v1 = vm.Project.VideoTracks.First();
+        var first = v1.OrderedClips.First();
+        vm.PlayheadFrame = first.StartFrame + first.LengthFrames / 2;
+        vm.SplitAtPlayhead();
+        c.Check(vm.Project.VideoTracks.First().Clips.Count == v1.Clips.Count + 1, "Teilen am Abspielkopf");
+        var second = vm.Project.VideoTracks.First().OrderedClips.ElementAt(1);
+        vm.SelectedClipId = second.Id;
+        c.Check(vm.SelectedClip is not null, "Clip ausgewählt, Inspektor zeigt Clip");
+        vm.SelectedClip!.VolumeDb = -6;
+        vm.SelectedClip.VolumeDb = -8;
+        c.Check(Math.Abs(vm.Project.FindClip(second.Id)!.Value.Clip.VolumeDb + 8) < 0.01, "Lautstärke im Inspektor");
+        vm.SelectedClip.FadeInSeconds = 0.5;
+        vm.RippleDeleteSelectedClip();
+        c.Check(vm.Project.FindClip(second.Id) is null, "Löschen und Lücke schließen");
+        vm.Undo();
+        c.Check(vm.Project.FindClip(second.Id) is not null, "Rückgängig nach Löschen");
+        var lastClip = vm.Project.VideoTracks.First().OrderedClips.Last();
+        vm.MoveClip(lastClip.Id, lastClip.StartFrame + 50, vm.Project.VideoTracks.First().Id);
+        c.Check(vm.Project.FindClip(lastClip.Id)!.Value.Clip.StartFrame == lastClip.StartFrame + 50, "Clip verschieben");
+        vm.TrimClip(lastClip.Id, atStart: false, -10);
+        c.Check(vm.Project.FindClip(lastClip.Id)!.Value.Clip.LengthFrames == lastClip.LengthFrames - 10, "Clip-Ende trimmen");
+        vm.PlayheadFrame = 10;
+        vm.MarkIn();
+        vm.PlayheadFrame = 60;
+        vm.MarkOut();
+        c.Check(vm.Project.MarkIn == 10 && vm.Project.MarkOut == 60, "In/Out-Marken");
+        vm.NextEdit();
+        c.Check(vm.PlayheadFrame > 60, "Zum nächsten Schnitt springen");
+        var newTrack = vm.Editor.AddTrack(MovieWorker.Core.Timeline.TrackKind.Video);
+        c.Check(vm.Project.VideoTracks.Count() == 2, "Videospur hinzugefügt");
+        c.Check(vm.InsertMediaAt(by70D!.Model.Id, newTrack.Id, 0), "Aufnahme per Drag & Drop auf V2");
+        vm.ToggleTrackMute(vm.Project.AudioTracks.First().Id);
+        c.Check(vm.Project.AudioTracks.First().Muted, "Spur stumm schalten");
+        timeline.ZoomBy(2);
+        timeline.ZoomToFit();
+        await Settle(2500);
+        var wave = await vm.Waveforms.GetAsync(vm.Project.AudioTracks.First().Clips[0].SourcePaths);
+        c.Check(wave is { Peaks.Length: > 0 }, "Wellenform geladen");
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "timeline.png"));
+        clipCount = vm.Project.AllClips.Count();
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");

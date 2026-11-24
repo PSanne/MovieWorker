@@ -7,8 +7,9 @@ Es ist auf Material der **Canon EOS R6 Mark II** und der **Canon EOS 70D** zuges
 professionelle Videos machen: vom Import der Speicherkarte über den Schnitt bis zum Export als
 H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 
-> **Stand: Sprint 1 von 9 abgeschlossen.** Der Kern (Erkennung, Timeline, Export) ist fertig und getestet,
-> die Bedienoberfläche folgt ab Sprint 2. Den kompletten Plan findest du in **[docs/SPRINTS.md](docs/SPRINTS.md)**.
+> **Stand: Sprint 3 von 9 abgeschlossen.** Import, Medienpool und Schnitt in der Timeline funktionieren.
+> Als Nächstes folgen Wiedergabe/Vorschau und der Export-Dialog. Den kompletten Plan findest du in
+> **[docs/SPRINTS.md](docs/SPRINTS.md)**.
 
 ## Was MovieWorker über deine Kameras weiß
 
@@ -23,6 +24,32 @@ H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 Die Kamera wird aus den Dateimerkmalen erkannt (Canon speichert das Modell in eigenen Datenblöcken).
 Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 
+## Bedienung
+
+| Bereich | Funktionen |
+|---|---|
+| **Import** | *Speicherkarte importieren*: erkennt Karten mit DCIM-Ordner, kopiert die Videos nach `Zielordner\Datum\Kamera` und prüft jede Kopie per SHA-256 · *Dateien importieren* (Strg+I) oder Dateien/Ordner ins Fenster ziehen · geteilte 4-GB-Aufnahmen werden automatisch zu einem Clip |
+| **Medienpool** | Vorschaubild, Länge, Kamera, Kennzeichen für Canon Log 3 / HDR / Zeitlupe · Inspektor mit technischen Daten, Hinweisen und Kamera-Tipps · Kamera von Hand festlegen |
+| **Timeline** | Clips per Doppelklick oder Ziehen aus dem Medienpool einfügen · verschieben (auch auf andere Spuren), an den Rändern trimmen · Einrasten an Schnittpunkten, Abspielkopf und Marken · Vorschaubilder und Ton-Wellenform in den Clips · Spuren hinzufügen und stummschalten |
+| **Clip-Inspektor** | Position und Länge als Timecode · Geschwindigkeit (Zeitlupe/Zeitraffer) · „Als Zeitlupe abspielen“ für 150/180-fps-Clips · Lautstärke, Ton stumm, Ein-/Ausblenden |
+| **Projekte** | Neu, Öffnen, Speichern (`.mvproj`), zuletzt geöffnete Projekte · Projekteinstellungen (Auflösung, Bildrate, Drop-Frame) · der erste Videoclip bestimmt die Einstellungen eines leeren Projekts |
+
+### Tastenkürzel
+
+| Aktion | Taste |
+|---|---|
+| Bild vor / zurück | → / ← (mit Umschalt: 1 Sekunde) |
+| Zum nächsten / vorigen Schnitt | ↓ / ↑ |
+| Anfang / Ende | Pos1 / Ende |
+| Am Abspielkopf teilen | Strg+B (oder Strg+K) |
+| Clip löschen / Lücke schließen | Entf / Umschalt+Entf |
+| In- / Out-Marke, Marken entfernen | I / O, Strg+Umschalt+X |
+| Einrasten an/aus | N |
+| Zoomen | Strg+Mausrad, + / −, Umschalt+Z = ganze Timeline |
+| Waagerecht scrollen | Mausrad über der Timeline |
+| Rückgängig / Wiederholen | Strg+Z / Strg+Y |
+| Neu / Öffnen / Speichern | Strg+N / Strg+O / Strg+S |
+
 ## Funktionen des Kerns (Sprint 1)
 
 | Bereich | Funktionen |
@@ -34,16 +61,28 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | **Export** | H.264 (Projektauflösung oder Full HD) · H.265 10 Bit · Apple ProRes 422 HQ · Avid DNxHR HQX – Ton AAC bzw. 24-Bit-PCM |
 | **Projekte** | Speichern als `Name.mvproj` (JSON); die Originalvideos werden nie verändert |
 
-## Selbst bauen
+## Loslegen
 
-Voraussetzungen: das [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-(oder Visual Studio 2022) und [FFmpeg](https://ffmpeg.org/download.html) (ab Sprint 2 im Download enthalten).
+### Fertige Version herunterladen
+Fertige Versionen gibt es unter **[Releases](https://github.com/PSanne/MovieWorker/releases/latest)**: ZIP herunterladen,
+entpacken, `MovieWorker.exe` starten. Es muss weder .NET noch FFmpeg installiert sein (FFmpeg liegt im Ordner `ffmpeg`).
+
+Zwischenstände aus jedem Push gibt es unter **Actions → „Build & Test“ → Lauf auswählen → Artifacts**
+(nur angemeldet sichtbar). Jeder Lauf startet die App unter Windows im **Selbsttest**: Testclips im Stil beider
+Kameras werden importiert, geschnitten, gespeichert und wieder geladen.
+
+### Selbst bauen
+Voraussetzungen: Windows 10/11, das [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+(oder Visual Studio 2022) und [FFmpeg](https://ffmpeg.org/download.html) (`ffmpeg.exe` und `ffprobe.exe`
+im PATH oder im Ordner `ffmpeg` neben der `MovieWorker.exe`).
 
 ```powershell
 git clone https://github.com/PSanne/MovieWorker.git
 cd MovieWorker
-dotnet test
+dotnet run --project src/MovieWorker.App
 ```
+
+Tests ausführen: `dotnet test`
 
 ## Projektstruktur
 
@@ -56,9 +95,17 @@ MovieWorker.sln
 │     ├─ Camera/                 Canon-Profile, Kamera-Erkennung, 4-GB-Aufteilung, Kartenscan
 │     ├─ Timeline/               Projekt, Spuren, Clips, Schnitt-Operationen, Rückgängig
 │     ├─ Export/                 Export-Vorlagen, ffmpeg-Befehle (Export, Proxy, Vorschaubild)
-│     └─ Projects/               Projektdateien (.mvproj)
+│     ├─ Projects/               Projektdateien (.mvproj), Medienpool, Import
+│     └─ Settings/               Einstellungen (%AppData%\MovieWorker)
+│  └─ MovieWorker.App/           WPF-Anwendung (MVVM, CommunityToolkit.Mvvm)
+│     ├─ Controls/               Timeline-Ansicht
+│     ├─ ViewModels/             Hauptfenster, Medienpool, Clip-Inspektor, Dialoge
+│     ├─ Views/                  Karten-Import, Projekteinstellungen
+│     ├─ Services/               Dialoge, Einstellungen, FFmpeg, Vorschaubilder, Wellenformen
+│     └─ SmokeTest.cs            Selbsttest der Oberfläche (läuft in GitHub Actions unter Windows)
 ├─ tests/
 │  └─ MovieWorker.Core.Tests/    xUnit-Tests für den Kern
+├─ build/                       Skripte für GitHub Actions (FFmpeg holen, Testclips, Selbsttest)
 └─ docs/
    └─ SPRINTS.md                 Sprint-Plan
 ```
@@ -74,6 +121,11 @@ einzigen ffmpeg-Aufruf übersetzt, jeder Clip wird per schnellem Seek nur so wei
 - **Timeline in Projektbildern, Quelle in Sekunden.** So lassen sich Clips mit anderer Bildrate (Zeitlupe mit
   150/180 fps, 70D mit 30p im 25p-Projekt) frei mischen und trotzdem bildgenau schneiden.
 - **Rückgängig speichert den Schnittzustand.** Es werden nur Schnittdaten kopiert, nie Videos – robust und sparsam.
+- **Speicherkarten werden kopiert, nicht direkt verwendet.** So kann die Karte zurück in die Kamera; die
+  SHA-256-Prüfung stellt sicher, dass jede Kopie bitgenau stimmt, bevor die Karte formatiert wird.
+- **Der Medienpool ist nicht Teil von Rückgängig.** Strg+Z nimmt Schnitte zurück, aber keine Importe – sonst
+  würden importierte Aufnahmen beim Zurücknehmen eines Schnitts verschwinden.
+- **Schnelle Reglerbewegungen ergeben einen einzigen Rückgängig-Schritt** (z. B. Lautstärke ziehen).
 - **Canon Log 3 wird über die Bit-Tiefe erkannt:** Die R6 Mark II nimmt 10 Bit nur mit Canon Log 3 oder HDR PQ auf;
   HDR PQ ist in den Metadaten markiert, also ist 10 Bit ohne PQ-Kennzeichen Canon Log 3.
 

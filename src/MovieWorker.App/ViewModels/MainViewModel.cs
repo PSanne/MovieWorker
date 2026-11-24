@@ -28,6 +28,7 @@ public sealed partial class MainViewModel : ObservableObject
         _settings = settings;
         _tools = tools;
         _thumbnails = thumbnails;
+        Waveforms = new WaveformService(tools);
         Editor = new TimelineEditor();
         Editor.Changed += OnEditorChanged;
         RefreshRecentProjects();
@@ -43,6 +44,8 @@ public sealed partial class MainViewModel : ObservableObject
     public MediaToolsService Tools => _tools;
 
     public ThumbnailService Thumbnails => _thumbnails;
+
+    public WaveformService Waveforms { get; }
 
     public ObservableCollection<MediaItemViewModel> MediaItems { get; } = [];
 
@@ -85,6 +88,35 @@ public sealed partial class MainViewModel : ObservableObject
     private double _busyProgress;
 
     public bool HasSelectedMedia => SelectedMedia is not null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PlayheadText))]
+    private long _playheadFrame;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSelectedClipCommand), nameof(RippleDeleteSelectedClipCommand))]
+    private Guid? _selectedClipId;
+
+    [ObservableProperty]
+    private ClipViewModel? _selectedClip;
+
+    [ObservableProperty]
+    private bool _snapping = true;
+
+    public string PlayheadText => Timecode.FromFrames(PlayheadFrame, Project.Settings.FrameRate, Project.Settings.DropFrameTimecode);
+
+    public bool HasSelectedClip => SelectedClipId is not null && Project.FindClip(SelectedClipId.Value) is not null;
+
+    partial void OnSelectedClipIdChanged(Guid? value) =>
+        SelectedClip = value is { } id && Project.FindClip(id) is not null ? new ClipViewModel(Editor, id) : null;
+
+    partial void OnPlayheadFrameChanged(long value)
+    {
+        if (value < 0)
+        {
+            PlayheadFrame = 0;
+        }
+    }
 
     /// <summary>Wird nach jeder Änderung an Timeline oder Medienpool ausgelöst (für Timeline-Ansicht und Monitore).</summary>
     public event EventHandler? ProjectChanged;
@@ -329,6 +361,7 @@ public sealed partial class MainViewModel : ObservableObject
         var clip = Editor.CreateClip(media, sourceIn, sourceOut);
         ApplyDefaultColor(clip, media);
         Editor.Append(track, clip);
+        SelectedClipId = clip.Id;
         StatusText = $"„{media.Name}“ in {track.Name} eingefügt.";
         return clip;
     }
@@ -360,6 +393,118 @@ public sealed partial class MainViewModel : ObservableObject
             StatusText = $"Projekteinstellungen vom ersten Clip übernommen: {settings.Label}";
         }
     }
+
+    /// <summary>Fügt eine Aufnahme an einer Stelle ein (Drag &amp; Drop aus dem Medienpool).</summary>
+    public bool InsertMediaAt(Guid mediaId, Guid? trackId, long frame)
+    {
+        if (Project.FindMedia(mediaId) is not { } media)
+        {
+            return false;
+        }
+
+        AdoptSettingsIfFirstClip(media);
+        var kind = media.IsAudioOnly ? TrackKind.Audio : TrackKind.Video;
+        var track = Project.Tracks.FirstOrDefault(t => t.Id == trackId && t.Kind == kind) ?? Project.Tracks.First(t => t.Kind == kind);
+        var clip = Editor.CreateClip(media);
+        ApplyDefaultColor(clip, media);
+        if (Editor.Insert(track, clip, frame))
+        {
+            SelectedClipId = clip.Id;
+            StatusText = $"„{media.Name}“ in {track.Name} eingefügt.";
+            return true;
+        }
+
+        StatusText = "Dort ist kein Platz – der Clip würde einen anderen überdecken.";
+        return false;
+    }
+
+    public void MoveClip(Guid clipId, long newStart, Guid trackId)
+    {
+        if (!Editor.Move(clipId, newStart, trackId))
+        {
+            StatusText = "Verschieben nicht möglich – der Clip würde einen anderen überdecken.";
+        }
+    }
+
+    public void TrimClip(Guid clipId, bool atStart, long delta)
+    {
+        var ok = atStart ? Editor.TrimStart(clipId, delta) : Editor.TrimEnd(clipId, delta);
+        if (!ok)
+        {
+            StatusText = "Trimmen nicht möglich (Ende der Aufnahme oder Nachbarclip erreicht).";
+        }
+    }
+
+    public void ToggleTrackMute(Guid trackId)
+    {
+        if (Project.Tracks.FirstOrDefault(t => t.Id == trackId) is { } track)
+        {
+            Editor.SetTrackMuted(trackId, !track.Muted);
+        }
+    }
+
+    [RelayCommand]
+    public void SplitAtPlayhead()
+    {
+        // Ist ein Clip ausgewählt und liegt unter dem Abspielkopf, wird nur er geteilt – sonst alle Spuren.
+        var only = SelectedClipId is { } id && Project.FindClip(id)?.Clip.Contains(PlayheadFrame) == true ? SelectedClipId : null;
+        StatusText = Editor.SplitAt(PlayheadFrame, only) ? "Geteilt." : "An dieser Stelle gibt es nichts zu teilen.";
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedClip))]
+    public void DeleteSelectedClip()
+    {
+        if (SelectedClipId is { } id && Editor.Delete(id))
+        {
+            SelectedClipId = null;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedClip))]
+    public void RippleDeleteSelectedClip()
+    {
+        if (SelectedClipId is { } id && Editor.Delete(id, ripple: true))
+        {
+            SelectedClipId = null;
+        }
+    }
+
+    [RelayCommand]
+    public void StepFrames(int frames) => PlayheadFrame = Math.Max(0, PlayheadFrame + frames);
+
+    [RelayCommand]
+    public void StepSeconds(int seconds) => StepFrames(seconds * Project.Settings.FrameRate.NominalFps);
+
+    [RelayCommand]
+    public void GoToStart() => PlayheadFrame = 0;
+
+    [RelayCommand]
+    public void GoToEnd() => PlayheadFrame = Editor.Duration;
+
+    [RelayCommand]
+    public void NextEdit() => PlayheadFrame = TimelineNavigation.NextEditPoint(Project, PlayheadFrame);
+
+    [RelayCommand]
+    public void PreviousEdit() => PlayheadFrame = TimelineNavigation.PreviousEditPoint(Project, PlayheadFrame);
+
+    [RelayCommand]
+    public void MarkIn() => Editor.SetMarks(PlayheadFrame, Project.MarkOut is { } o && o > PlayheadFrame ? o : null);
+
+    [RelayCommand]
+    public void MarkOut()
+    {
+        var markIn = Project.MarkIn is { } i && i < PlayheadFrame ? i : 0;
+        Editor.SetMarks(markIn, PlayheadFrame);
+    }
+
+    [RelayCommand]
+    public void ClearMarks() => Editor.SetMarks(null, null);
+
+    [RelayCommand]
+    private void AddVideoTrack() => Editor.AddTrack(TrackKind.Video);
+
+    [RelayCommand]
+    private void AddAudioTrack() => Editor.AddTrack(TrackKind.Audio);
 
     [RelayCommand]
     public void Undo()
@@ -478,6 +623,15 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void RaiseProjectChanged()
     {
+        if (SelectedClipId is { } id && Project.FindClip(id) is null)
+        {
+            SelectedClipId = null;
+        }
+
+        SelectedClip?.Refresh();
+        DeleteSelectedClipCommand.NotifyCanExecuteChanged();
+        RippleDeleteSelectedClipCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(PlayheadText));
         OnPropertyChanged(nameof(Project));
         OnPropertyChanged(nameof(ProjectSettingsText));
         OnPropertyChanged(nameof(DurationText));

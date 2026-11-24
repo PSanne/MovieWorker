@@ -7,9 +7,9 @@ dann sichtbare Bedienung, dann Profi-Funktionen.
 | Sprint | Thema | Ergebnis | Status |
 |---|---|---|---|
 | 1 | Fundament & Kern | Plattformunabhängiger Kern mit Canon-Erkennung, Timeline und Export | ✅ fertig |
-| 2 | App-Grundgerüst & Import | Windows-App, Speicherkarte importieren, Medienpool | ⏳ als Nächstes |
-| 3 | Timeline-Oberfläche | Schneiden mit der Maus | offen |
-| 4 | Vorschau & Proxys | Abspielen, Quell- und Programmmonitor | offen |
+| 2 | App-Grundgerüst & Import | Windows-App, Speicherkarte importieren, Medienpool | ✅ fertig |
+| 3 | Timeline-Oberfläche | Schneiden mit der Maus | ✅ fertig |
+| 4 | Vorschau & Proxys | Abspielen, Quell- und Programmmonitor | ⏳ als Nächstes |
 | 5 | Export-Dialog | Fertige Filme ausgeben (→ erste nutzbare Version 0.5) | offen |
 | 6 | Farbe & Canon-Look | Canon Log 3, HDR, Farbkorrektur, Messinstrumente | offen |
 | 7 | Ton | Pegel, Lautheit, Ducking, externen Ton anlegen | offen |
@@ -32,7 +32,7 @@ dann sichtbare Bedienung, dann Profi-Funktionen.
   ProRes 422 HQ, DNxHR HQX; LUT (lut3d) und HDR→SDR-Tone-Mapping; Proxy- und Vorschaubild-Befehle
 - 53 Tests, zusätzlich mit echtem ffmpeg an Testclips geprüft
 
-## Sprint 2 – App-Grundgerüst & Import
+## Sprint 2 – App-Grundgerüst & Import ✅
 - WPF-Anwendung (.NET 8, MVVM) mit Hauptfenster, Menüs, Statuszeile
 - ffmpeg finden (neben der .exe, im PATH oder in den Einstellungen); im Release-ZIP mitgeliefert
 - **Speicherkarte/DCIM-Ordner importieren** (optional auf die Festplatte kopieren, mit Prüfsumme)
@@ -40,11 +40,12 @@ dann sichtbare Bedienung, dann Profi-Funktionen.
 - Projekt neu/öffnen/speichern, zuletzt geöffnete Projekte, Projekteinstellungen aus erstem Clip
 - Release-Workflow: ZIP-Download wie bei MusicWorker
 
-## Sprint 3 – Timeline-Oberfläche
+## Sprint 3 – Timeline-Oberfläche ✅
 - Spuransicht mit Zeitlineal (Timecode), Abspielkopf, Zoom und Scrollen
 - Clips ziehen (auch zwischen Spuren), Ränder trimmen, Teilen (Strg+B), Löschen/Lücke schließen
 - Einrasten an Clipkanten und Abspielkopf, Vorschaubilder im Clip, Ton-Wellenform
-- Tastenkürzel nach Branchenstandard: J/K/L, I/O, Pfeiltasten bildweise
+- Tastenkürzel nach Branchenstandard: I/O, Pfeiltasten bildweise, Strg+B (J/K/L folgt mit der Wiedergabe in Sprint 4)
+- Clip-Inspektor: Geschwindigkeit, Zeitlupe konformieren, Lautstärke, Blenden; Spuren hinzufügen und stummschalten
 
 ## Sprint 4 – Vorschau & Proxys
 - Quellmonitor mit In-/Out-Punkten und „In Timeline einfügen“

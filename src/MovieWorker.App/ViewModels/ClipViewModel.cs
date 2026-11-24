@@ -1,0 +1,125 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using MovieWorker.Core.Projects;
+using MovieWorker.Core.Time;
+using MovieWorker.Core.Timeline;
+
+namespace MovieWorker.App.ViewModels;
+
+public sealed record SpeedChoice(double Speed, string Label)
+{
+    public override string ToString() => Label;
+}
+
+/// <summary>Eigenschaften des ausgewählten Timeline-Clips im Inspektor. Jede Änderung ist rückgängig machbar.</summary>
+public sealed partial class ClipViewModel : ObservableObject
+{
+    private readonly TimelineEditor _editor;
+
+    public ClipViewModel(TimelineEditor editor, Guid clipId)
+    {
+        _editor = editor;
+        ClipId = clipId;
+    }
+
+    public Guid ClipId { get; }
+
+    public bool Exists => _editor.Project.FindClip(ClipId) is not null;
+
+    private TimelineClip Clip => _editor.Project.FindClip(ClipId)?.Clip ?? new TimelineClip();
+
+    private TimelineTrack? Track => _editor.Project.FindClip(ClipId)?.Track;
+
+    private FrameRate Rate => _editor.Project.Settings.FrameRate;
+
+    private bool DropFrame => _editor.Project.Settings.DropFrameTimecode;
+
+    public MediaItem? Media => _editor.Project.FindMedia(Clip.MediaId);
+
+    public string Name => Clip.Name;
+
+    public string TrackName => Track?.Name ?? string.Empty;
+
+    public bool IsVideoClip => Track?.Kind == TrackKind.Video;
+
+    public string StartText => Timecode.FromFrames(Clip.StartFrame, Rate, DropFrame);
+
+    public string EndText => Timecode.FromFrames(Clip.EndFrame, Rate, DropFrame);
+
+    public string LengthText => Timecode.FromFrames(Clip.LengthFrames, Rate, DropFrame);
+
+    public string SourceText =>
+        $"{Timecode.FormatDuration(TimeSpan.FromSeconds(Clip.SourceIn))} – {Timecode.FormatDuration(TimeSpan.FromSeconds(Clip.SourceOut(Rate)))}";
+
+    public bool HasAudio => Clip.HasAudio;
+
+    public IReadOnlyList<SpeedChoice> SpeedChoices { get; } =
+    [
+        new(0.1, "10 % (Zeitlupe)"),
+        new(0.2, "20 % (Zeitlupe)"),
+        new(0.25, "25 % (Zeitlupe)"),
+        new(0.5, "50 % (Zeitlupe)"),
+        new(1, "100 % (normal)"),
+        new(2, "200 % (Zeitraffer)"),
+        new(4, "400 % (Zeitraffer)"),
+        new(8, "800 % (Zeitraffer)"),
+    ];
+
+    public SpeedChoice? SelectedSpeed
+    {
+        get => SpeedChoices.FirstOrDefault(s => Math.Abs(s.Speed - Clip.Speed) < 1e-6)
+            ?? new SpeedChoice(Clip.Speed, $"{Clip.Speed * 100:0.#} %");
+        set
+        {
+            if (value is not null && Math.Abs(value.Speed - Clip.Speed) > 1e-6 && !_editor.SetSpeed(ClipId, value.Speed))
+            {
+                LastError = "Dahinter ist nicht genug Platz für die neue Länge.";
+            }
+        }
+    }
+
+    /// <summary>Quelle mit hoher Bildrate (Zeitlupen-Material der R6 Mark II).</summary>
+    public bool CanConform => Media?.Detection.IsHighFrameRate == true;
+
+    public string ConformText => Media?.First.Video is { } v
+        ? $"Als Zeitlupe abspielen ({v.FrameRate} fps → {Rate} fps)"
+        : string.Empty;
+
+    [RelayCommand]
+    private void Conform()
+    {
+        if (Media?.First.Video is { } video && !_editor.ConformToProjectRate(ClipId, video.FrameRate.Value))
+        {
+            LastError = "Dahinter ist nicht genug Platz für die Zeitlupe.";
+        }
+    }
+
+    public double VolumeDb
+    {
+        get => Clip.VolumeDb;
+        set => _editor.UpdateClip(ClipId, "Lautstärke", c => c.VolumeDb = Math.Round(value, 1), mergeSimilar: true);
+    }
+
+    public bool AudioMuted
+    {
+        get => Clip.AudioMuted;
+        set => _editor.UpdateClip(ClipId, value ? "Ton aus" : "Ton an", c => c.AudioMuted = value);
+    }
+
+    public double FadeInSeconds
+    {
+        get => Math.Round(Rate.FramesToSeconds(Clip.FadeInFrames), 2);
+        set => _editor.UpdateClip(ClipId, "Einblenden", c => c.FadeInFrames = Rate.SecondsToFrames(Math.Max(0, value)), mergeSimilar: true);
+    }
+
+    public double FadeOutSeconds
+    {
+        get => Math.Round(Rate.FramesToSeconds(Clip.FadeOutFrames), 2);
+        set => _editor.UpdateClip(ClipId, "Ausblenden", c => c.FadeOutFrames = Rate.SecondsToFrames(Math.Max(0, value)), mergeSimilar: true);
+    }
+
+    [ObservableProperty]
+    private string? _lastError;
+
+    public void Refresh() => OnPropertyChanged(string.Empty);
+}

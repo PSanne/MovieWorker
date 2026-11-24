@@ -320,9 +320,9 @@ public sealed class TimelineEditor
     }
 
     /// <summary>Ändert Eigenschaften eines Clips (Lautstärke, Farbe, Blenden …) rückgängig machbar.</summary>
-    public bool UpdateClip(Guid clipId, string description, Action<TimelineClip> change)
+    public bool UpdateClip(Guid clipId, string description, Action<TimelineClip> change, bool mergeSimilar = false)
     {
-        return Modify(description, p =>
+        return Modify(description, mergeSimilar ? $"{description}|{clipId}" : null, p =>
         {
             if (p.FindClip(clipId) is not (_, { } clip))
             {
@@ -364,12 +364,71 @@ public sealed class TimelineEditor
         });
     }
 
+    /// <summary>Setzt In-/Out-Marken (null = entfernen). Out liegt immer hinter In.</summary>
+    public void SetMarks(long? markIn, long? markOut)
+    {
+        if (markIn is { } i && markOut is { } o && o <= i)
+        {
+            markOut = null;
+        }
+
+        Modify("Marken setzen", p =>
+        {
+            if (p.MarkIn == markIn && p.MarkOut == markOut)
+            {
+                return false;
+            }
+
+            p.MarkIn = markIn;
+            p.MarkOut = markOut;
+            return true;
+        });
+    }
+
+    /// <summary>Spur stumm/aktiv schalten.</summary>
+    public bool SetTrackMuted(Guid trackId, bool muted) =>
+        Modify(muted ? "Spur stumm" : "Spur aktiv", p =>
+        {
+            var track = p.Tracks.FirstOrDefault(t => t.Id == trackId);
+            if (track is null || track.Muted == muted)
+            {
+                return false;
+            }
+
+            track.Muted = muted;
+            return true;
+        });
+
+    /// <summary>Fügt eine neue Spur hinzu (Video oben, Audio unten).</summary>
+    public TimelineTrack AddTrack(TrackKind kind)
+    {
+        var count = Project.Tracks.Count(t => t.Kind == kind) + 1;
+        var track = new TimelineTrack { Kind = kind, Name = kind == TrackKind.Video ? $"V{count}" : $"A{count}" };
+        Modify("Spur hinzufügen", p =>
+        {
+            if (kind == TrackKind.Video)
+            {
+                var lastVideo = p.Tracks.FindLastIndex(t => t.Kind == TrackKind.Video);
+                p.Tracks.Insert(lastVideo + 1, track);
+            }
+            else
+            {
+                p.Tracks.Add(track);
+            }
+
+            return true;
+        });
+        return track;
+    }
+
     public bool Undo() => Restore(History.Undo(Project));
 
     public bool Redo() => Restore(History.Redo(Project));
 
     /// <summary>Führt eine Änderung an einer Kopie aus; nur bei Erfolg wird sie übernommen und im Verlauf gespeichert.</summary>
-    private bool Modify(string description, Func<MovieProject, bool> change)
+    private bool Modify(string description, Func<MovieProject, bool> change) => Modify(description, null, change);
+
+    private bool Modify(string description, string? mergeKey, Func<MovieProject, bool> change)
     {
         var working = Project.Clone();
         if (!change(working))
@@ -377,7 +436,7 @@ public sealed class TimelineEditor
             return false;
         }
 
-        History.Record(Project, description);
+        History.Record(Project, description, mergeKey);
         Project = working;
         OnChanged();
         return true;

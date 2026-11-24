@@ -193,6 +193,15 @@ public sealed class MovieProject
 
     public List<TimelineTrack> Tracks { get; set; } = [];
 
+    /// <summary>In-Marke der Timeline (z. B. für „nur Bereich exportieren“).</summary>
+    public long? MarkIn { get; set; }
+
+    /// <summary>Out-Marke der Timeline (exklusiv).</summary>
+    public long? MarkOut { get; set; }
+
+    [JsonIgnore]
+    public bool HasRange => MarkIn is { } i && MarkOut is { } o && o > i;
+
     /// <summary>Medienpool: alle importierten Aufnahmen (auch die, die noch nicht in der Timeline liegen).</summary>
     public List<MediaItem> Media { get; set; } = [];
 
@@ -242,5 +251,7 @@ public sealed class MovieProject
         Settings = Settings.Clone(),
         Tracks = Tracks.Select(t => t.Clone()).ToList(),
         Media = [.. Media],
+        MarkIn = MarkIn,
+        MarkOut = MarkOut,
     };
 }
