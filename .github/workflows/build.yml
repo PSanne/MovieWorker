@@ -1,0 +1,26 @@
+name: Build & Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore MovieWorker.sln
+
+      - name: Build
+        run: dotnet build MovieWorker.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test MovieWorker.sln --configuration Release --no-build --verbosity normal

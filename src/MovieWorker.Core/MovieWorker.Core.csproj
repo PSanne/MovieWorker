@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Plattformunabhängiger Kern: Medien-Analyse, Canon-Kameraprofile, Timeline, Rückgängig, Export-Befehle.
+       Enthält bewusst keine Windows- oder UI-Abhängigkeiten, damit alles testbar bleibt. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>MovieWorker.Core</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

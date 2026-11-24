@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{2B682885-6BB3-40C3-8F46-82B1B490D71B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MovieWorker.Core", "src\MovieWorker.Core\MovieWorker.Core.csproj", "{56A2D9EA-39C2-4815-BC6D-32A0509FACB6}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{38AB33D7-77FA-4F6E-A8C8-C45E6F31BA0F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MovieWorker.Core.Tests", "tests\MovieWorker.Core.Tests\MovieWorker.Core.Tests.csproj", "{CE18BB0E-A72B-4912-A18F-D8C045F3B26F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{56A2D9EA-39C2-4815-BC6D-32A0509FACB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56A2D9EA-39C2-4815-BC6D-32A0509FACB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56A2D9EA-39C2-4815-BC6D-32A0509FACB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56A2D9EA-39C2-4815-BC6D-32A0509FACB6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CE18BB0E-A72B-4912-A18F-D8C045F3B26F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CE18BB0E-A72B-4912-A18F-D8C045F3B26F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CE18BB0E-A72B-4912-A18F-D8C045F3B26F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CE18BB0E-A72B-4912-A18F-D8C045F3B26F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{56A2D9EA-39C2-4815-BC6D-32A0509FACB6} = {2B682885-6BB3-40C3-8F46-82B1B490D71B}
+		{CE18BB0E-A72B-4912-A18F-D8C045F3B26F} = {38AB33D7-77FA-4F6E-A8C8-C45E6F31BA0F}
+	EndGlobalSection
+EndGlobal
