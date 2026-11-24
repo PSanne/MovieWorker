@@ -25,6 +25,16 @@ Invoke-Ffmpeg @('-f', 'lavfi', '-i', 'testsrc=s=1920x1080:r=25:d=2', '-c:v', 'li
     '-x265-params', 'log-level=error', '-color_trc', 'smpte2084', '-color_primaries', 'bt2020', '-colorspace', 'bt2020nc',
     (Join-Path $cardR6 'MVI_0100.MP4'))
 
+# Externer Rekorder + 70D-Clip, dessen Ton 0,75 s später im Rekorder-Ton beginnt (für die Ton-Synchronisation)
+$rec = Join-Path $Output 'Rekorder'
+New-Item -ItemType Directory -Force $rec | Out-Null
+$zoom = Join-Path $rec 'ZOOM0001.WAV'
+Invoke-Ffmpeg @('-f', 'lavfi', '-i', "anoisesrc=d=12:c=pink:r=48000:seed=42,volume='0.15+0.85*abs(sin(2.3*t)*sin(0.9*t+1.3))':eval=frame",
+    '-ac', '2', '-c:a', 'pcm_s24le', $zoom)
+Invoke-Ffmpeg @('-f', 'lavfi', '-i', 'testsrc2=s=1920x1080:r=25:d=6', '-i', $zoom,
+    '-filter_complex', '[1:a]atrim=start=0.75:duration=6,asetpts=PTS-STARTPTS,volume=0.5[a]',
+    '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'pcm_s16le', (Join-Path $card70 'MVI_0002.MOV'))
+
 # Musik
 Invoke-Ffmpeg @('-f', 'lavfi', '-i', 'sine=f=220:d=10', '-ac', '2', '-c:a', 'pcm_s16le', (Join-Path $Output 'musik.wav'))
 

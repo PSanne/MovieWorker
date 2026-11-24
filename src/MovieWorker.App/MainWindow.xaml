@@ -57,6 +57,9 @@
                 <Separator />
                 <MenuItem Header="_Einrasten" InputGestureText="N" IsCheckable="True" IsChecked="{Binding Snapping}" />
                 <MenuItem Header="Videospur hinzufügen" Command="{Binding AddVideoTrackCommand}" />
+                <Separator />
+                <MenuItem Header="Neuer _Ordner im Medienpool …" Command="{Binding NewBinCommand}" />
+                <MenuItem Header="Externen Ton _automatisch synchronisieren" Command="{Binding AutoSyncAllCommand}" />
                 <MenuItem Header="Tonspur hinzufügen" Command="{Binding AddAudioTrackCommand}" />
             </MenuItem>
             <MenuItem Header="_Wiedergabe">
@@ -124,7 +127,25 @@
 
             <!-- Medienpool -->
             <DockPanel Grid.Row="0" Grid.Column="0">
-                <TextBlock DockPanel.Dock="Top" Margin="8,6" FontWeight="SemiBold" Text="Medienpool" />
+                <TextBlock DockPanel.Dock="Top" Margin="8,6,8,2" FontWeight="SemiBold" Text="Medienpool" />
+                <StackPanel DockPanel.Dock="Top" Margin="6,0,6,4">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="🗑" Width="26" Margin="2,0,0,0" ToolTip="Ordner löschen" Command="{Binding DeleteBinCommand}" />
+                        <Button DockPanel.Dock="Right" Content="✎" Width="26" Margin="2,0,0,0" ToolTip="Ordner umbenennen" Command="{Binding RenameBinCommand}" />
+                        <Button DockPanel.Dock="Right" Content="+" Width="26" Margin="2,0,0,0" ToolTip="Neuer Ordner" Command="{Binding NewBinCommand}" />
+                        <ComboBox ItemsSource="{Binding Bins}" SelectedItem="{Binding SelectedBin}" ToolTip="Ordner" />
+                    </DockPanel>
+                    <DockPanel Margin="0,4,0,0">
+                        <TextBlock DockPanel.Dock="Left" Text="🔍" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Suchen in Name, Schlagwörtern, Notizen, Szene und Take" />
+                    </DockPanel>
+                    <UniformGrid Columns="3" Margin="0,4,0,0">
+                        <ComboBox ItemsSource="{Binding KindFilters}" SelectedIndex="{Binding KindFilter}" Margin="0,0,2,0" />
+                        <ComboBox ItemsSource="{Binding RatingFilters}" SelectedIndex="{Binding MinRatingFilter}" Margin="1,0" />
+                        <ComboBox ItemsSource="{Binding SortModes}" SelectedIndex="{Binding SortMode}" Margin="2,0,0,0" ToolTip="Sortierung" />
+                    </UniformGrid>
+                </StackPanel>
                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="6">
                     <Button Content="In Timeline einfügen" Padding="8,2" Command="{Binding AddSelectedToTimelineCommand}" />
                     <Button Content="Proxy" Padding="8,2" Margin="6,0,0,0" ToolTip="Proxy für flüssige Vorschau erstellen"
@@ -132,7 +153,7 @@
                     <Button Content="Entfernen" Padding="8,2" Margin="6,0,0,0" Command="{Binding RemoveSelectedMediaCommand}" />
                 </StackPanel>
                 <Grid>
-                    <ListBox x:Name="MediaList" ItemsSource="{Binding MediaItems}" SelectedItem="{Binding SelectedMedia}"
+                    <ListBox x:Name="MediaList" ItemsSource="{Binding MediaView}" SelectedItem="{Binding SelectedMedia}"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" MouseDoubleClick="OnMediaDoubleClick"
                              PreviewMouseLeftButtonDown="OnMediaMouseDown" PreviewMouseMove="OnMediaMouseMove">
                         <ListBox.ItemTemplate>
@@ -155,6 +176,12 @@
                                     <StackPanel Grid.Column="1">
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Text="{Binding CameraLabel}" FontSize="11" Foreground="#555" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Stars}" FontSize="11" Foreground="#C88A00" />
+                                            <TextBlock Text="{Binding SceneTakeText}" FontSize="11" Foreground="#555" Margin="6,0,0,0" />
+                                            <TextBlock Text=" 🔗" FontSize="11" ToolTip="Mit externem Ton synchronisiert"
+                                                       Visibility="{Binding HasSync, Converter={StaticResource BoolToVisibility}}" />
+                                        </StackPanel>
                                         <WrapPanel Margin="0,2,0,0">
                                             <Border Style="{StaticResource Badge}" Background="#FFE9C8"
                                                     Visibility="{Binding HasSpecialTransfer, Converter={StaticResource BoolToVisibility}}">
@@ -307,6 +334,58 @@
                                     Visibility="{Binding Converter={StaticResource NullToVisibility}}">
                             <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding Summary}" Style="{StaticResource Hint}" />
+
+                            <TextBlock Text="Ordnen" Style="{StaticResource SectionHeader}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Ordner" VerticalAlignment="Center" />
+                                <ComboBox Grid.Column="1" Margin="0,2"
+                                          ItemsSource="{Binding DataContext.TargetBins, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedItem="{Binding DataContext.SelectedMediaBin, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                <TextBlock Grid.Row="1" Text="Bewertung" VerticalAlignment="Center" />
+                                <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,2" SelectedIndex="{Binding Rating}">
+                                    <ComboBoxItem Content="☆☆☆☆☆  keine" />
+                                    <ComboBoxItem Content="★☆☆☆☆" />
+                                    <ComboBoxItem Content="★★☆☆☆" />
+                                    <ComboBoxItem Content="★★★☆☆" />
+                                    <ComboBoxItem Content="★★★★☆" />
+                                    <ComboBoxItem Content="★★★★★" />
+                                </ComboBox>
+                                <TextBlock Grid.Row="2" Text="Szene / Take" VerticalAlignment="Center" />
+                                <UniformGrid Grid.Row="2" Grid.Column="1" Columns="2" Margin="0,2">
+                                    <TextBox Text="{Binding Scene, UpdateSourceTrigger=LostFocus}" Margin="0,0,2,0" ToolTip="Szene" />
+                                    <TextBox Text="{Binding Take, UpdateSourceTrigger=LostFocus}" Margin="2,0,0,0" ToolTip="Take" />
+                                </UniformGrid>
+                                <TextBlock Grid.Row="3" Text="Schlagwörter" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="3" Grid.Column="1" Margin="0,2" Text="{Binding KeywordsText, UpdateSourceTrigger=LostFocus}"
+                                         ToolTip="Mit Komma trennen, z. B.: Hochzeit, Kirche, Ringe" />
+                                <TextBlock Grid.Row="4" Text="Notizen" VerticalAlignment="Top" Margin="0,4,0,0" />
+                                <TextBox Grid.Row="4" Grid.Column="1" Margin="0,2" MinHeight="48" TextWrapping="Wrap" AcceptsReturn="True"
+                                         Text="{Binding Notes, UpdateSourceTrigger=LostFocus}" />
+                            </Grid>
+
+                            <StackPanel Visibility="{Binding IsAudioOnly, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}">
+                                <TextBlock Text="Externer Ton (Rekorder)" Style="{StaticResource SectionHeader}" />
+                                <TextBlock Text="{Binding SyncText}" TextWrapping="Wrap" />
+                                <DockPanel Margin="0,4,0,0">
+                                    <Button DockPanel.Dock="Right" Content="Synchronisieren" Padding="6,1" Margin="4,0,0,0"
+                                            Command="{Binding DataContext.SyncSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                    <ComboBox ItemsSource="{Binding DataContext.AudioMediaItems, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              SelectedItem="{Binding DataContext.SelectedSyncAudio, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              DisplayMemberPath="Name" ToolTip="Tonaufnahme wählen, die zur selben Szene gehört" />
+                                </DockPanel>
+                                <StackPanel Visibility="{Binding HasSync, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
+                                    <CheckBox Content="Kameraton beim Einfügen stummschalten" IsChecked="{Binding ReplaceCameraAudio}" />
+                                    <Button Content="Verknüpfung lösen" HorizontalAlignment="Left" Padding="6,1" Margin="0,4,0,0"
+                                            Command="{Binding DataContext.RemoveSyncCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                </StackPanel>
+                            </StackPanel>
 
                             <TextBlock Text="Kamera" Style="{StaticResource SectionHeader}" />
                             <ComboBox ItemsSource="{Binding CameraChoices}" SelectedItem="{Binding SelectedCamera}" />

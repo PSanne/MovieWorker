@@ -61,6 +61,12 @@ public sealed class WpfDialogService : IDialogService
             _ => DialogAnswer.Cancel,
         };
 
+    public string? Prompt(string message, string title, string defaultValue)
+    {
+        var window = new TextInputWindow(message, defaultValue) { Title = title, Owner = Owner };
+        return window.ShowDialog() == true ? window.Value : null;
+    }
+
     public bool ShowDialog(object viewModel)
     {
         Window window = viewModel switch

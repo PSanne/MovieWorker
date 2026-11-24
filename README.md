@@ -7,7 +7,7 @@ Es ist auf Material der **Canon EOS R6 Mark II** und der **Canon EOS 70D** zuges
 professionelle Videos machen: vom Import der Speicherkarte über den Schnitt bis zum Export als
 H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 
-> **Stand: Version 0.5 – Sprint 5 von 16 abgeschlossen.** Die erste voll nutzbare Version: importieren, schneiden,
+> **Stand: Sprint 6 von 16 abgeschlossen (Version 0.5 + Medien-Arbeitsbereich).** Die erste voll nutzbare Version: importieren, schneiden,
 > abspielen und für YouTube, Instagram/TikTok oder als Master exportieren. Den kompletten Plan findest du in
 > **[docs/SPRINTS.md](docs/SPRINTS.md)**.
 
@@ -30,6 +30,8 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 |---|---|
 | **Import** | *Speicherkarte importieren*: erkennt Karten mit DCIM-Ordner, kopiert die Videos nach `Zielordner\Datum\Kamera` und prüft jede Kopie per SHA-256 · *Dateien importieren* (Strg+I) oder Dateien/Ordner ins Fenster ziehen · geteilte 4-GB-Aufnahmen werden automatisch zu einem Clip |
 | **Medienpool** | Vorschaubild, Länge, Kamera, Kennzeichen für Canon Log 3 / HDR / Zeitlupe · Inspektor mit technischen Daten, Hinweisen und Kamera-Tipps · Kamera von Hand festlegen |
+| **Ordnen** | **Ordner** (anlegen, umbenennen, löschen; Aufnahmen im Inspektor einsortieren) · **Bewertung** (0–5 Sterne), **Schlagwörter**, **Szene/Take**, **Notizen** · **Suche** über Name, Schlagwörter, Notizen, Szene und Take · Filter (Video/Ton, Mindestbewertung) · Sortierung nach Name, Aufnahmezeit, Bewertung oder Länge |
+| **Bild-Ton-Sync** | Externen Ton (z. B. Zoom-/Tascam-Rekorder) per Wellenform an den Kameraton anlegen – auf 5 ms genau, auch wenn der Rekorder früher oder später gestartet wurde · *Bearbeiten → Externen Ton automatisch synchronisieren* probiert alle Kombinationen · beim Einfügen kommt der passende Ausschnitt des externen Tons automatisch auf A2, der Kameraton wird stummgeschaltet (abschaltbar) |
 | **Timeline** | Clips per Doppelklick oder Ziehen aus dem Medienpool einfügen · verschieben (auch auf andere Spuren), an den Rändern trimmen · Einrasten an Schnittpunkten, Abspielkopf und Marken · Vorschaubilder und Ton-Wellenform in den Clips · Spuren hinzufügen und stummschalten |
 | **Clip-Inspektor** | Position und Länge als Timecode · Geschwindigkeit (Zeitlupe/Zeitraffer) · „Als Zeitlupe abspielen“ für 150/180-fps-Clips · Lautstärke, Ton stumm, Ein-/Ausblenden |
 | **Monitore** | *Quelle*: Aufnahme ansehen, In/Out setzen, Ausschnitt ans Ende oder am Abspielkopf einfügen · *Programm*: Timeline abspielen; im Stillstand exaktes Standbild mit LUT/HDR-Umrechnung wie im Export · J/K/L-Shuttle |
@@ -137,6 +139,10 @@ einzigen ffmpeg-Aufruf übersetzt, jeder Clip wird per schnellem Seek nur so wei
   wird nachgeführt. So stimmt die Position auch bei Lücken, Spurwechseln und Dateien, die Windows nicht abspielen
   kann (dann zeigt der Monitor Standbilder). Im Stillstand rechnet ffmpeg ein exaktes Bild – mit derselben
   Farbumrechnung wie der Export.
+- **Synchronisation über Lautstärke-Einsätze statt Rohsignal.** Kamera- und Rekordermikrofon klingen unterschiedlich,
+  aber Klatschen, Silben und Geräusche setzen gleichzeitig ein. Verglichen werden deshalb die Anstiege der Lautstärke
+  (5-ms-Raster) per Kreuzkorrelation über FFT – das ist robust und dauert auch bei langen Aufnahmen nur Sekunden.
+- **Ordner, Bewertungen und Notizen gehören zum Projekt**, nicht zu den Dateien – die Originale bleiben unberührt.
 - **Export-Aufträge arbeiten mit einer Kopie des Projekts.** So kann man während eines langen Exports weiterschneiden,
   ohne das Ergebnis zu verändern. Exportiert wird in eine `.part`-Datei, die erst am Ende umbenannt wird – ein
   abgebrochener Export hinterlässt keine halbe Datei.

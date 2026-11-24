@@ -129,6 +129,41 @@ public sealed class TimelineEditor
         });
     }
 
+    /// <summary>
+    /// Fügt einen Videoclip ein (am Ende oder an <paramref name="start"/>) und – falls vorhanden – den dazu
+    /// synchronisierten externen Ton auf einer freien Tonspur (bevorzugt A2). Ein einziger Rückgängig-Schritt.
+    /// </summary>
+    public bool InsertWithAudio(TimelineTrack track, TimelineClip clip, long? start, TimelineClip? audioClip, long audioOffsetFrames = 0)
+    {
+        return Modify("Clip einfügen", p =>
+        {
+            var target = p.Tracks.First(t => t.Id == track.Id);
+            var position = start ?? target.Clips.Select(c => c.EndFrame).DefaultIfEmpty(0).Max();
+            if (!target.IsFree(position, clip.LengthFrames))
+            {
+                return false;
+            }
+
+            clip.StartFrame = position;
+            target.Clips.Add(clip);
+            if (audioClip is not null)
+            {
+                audioClip.StartFrame = position + audioOffsetFrames;
+                var audioTrack = p.AudioTracks.Skip(1).Concat(p.AudioTracks.Take(1))
+                    .FirstOrDefault(t => t.IsFree(audioClip.StartFrame, audioClip.LengthFrames));
+                if (audioTrack is null)
+                {
+                    audioTrack = new TimelineTrack { Kind = TrackKind.Audio, Name = $"A{p.AudioTracks.Count() + 1}" };
+                    p.Tracks.Add(audioTrack);
+                }
+
+                audioTrack.Clips.Add(audioClip);
+            }
+
+            return true;
+        });
+    }
+
     /// <summary>Teilt alle Clips an der Abspielposition (oder nur einen bestimmten Clip).</summary>
     public bool SplitAt(long frame, Guid? onlyClip = null)
     {
@@ -450,6 +485,7 @@ public sealed class TimelineEditor
         }
 
         state.Media = Project.Media; // Der Medienpool ist nicht Teil von Rückgängig.
+        state.Bins = Project.Bins;
         Project = state;
         OnChanged();
         return true;

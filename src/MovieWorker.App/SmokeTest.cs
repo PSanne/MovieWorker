@@ -145,7 +145,7 @@ public static class SmokeTest
         }
 
         c.Check(vm.Project.VideoTracks.First().Clips.Count == imported.Count(m => !m.IsAudioOnly), "Videoclips in V1");
-        c.Check(vm.Project.AudioTracks.First().Clips.Count == 1, "Musik in A1");
+        c.Check(vm.Project.AudioTracks.First().Clips.Count == imported.Count(m => m.IsAudioOnly), "Musik und Rekorder-Ton in A1");
         var firstVideo = imported.First(m => !m.IsAudioOnly).Model.First.Video!;
         c.Check(vm.Project.Settings.Width == firstVideo.Width, "Projekteinstellungen vom ersten Clip übernommen");
         var clipCount = vm.Project.AllClips.Count();
@@ -267,6 +267,44 @@ public static class SmokeTest
         c.Check(await vm.ExportStillToAsync(Path.Combine(exportFolder, "bild.png")), "Einzelbild exportiert");
         SaveScreenshot(window, Path.Combine(c.OutputFolder, "export.png"));
 
+        // ---- Medien-Arbeitsbereich (Sprint 6): Ordner, Filter, Metadaten, Ton-Synchronisation
+        dialogs.Answers.Enqueue("Interviews");
+        vm.NewBin();
+        var interviews = vm.Bins.First(b => b.Kind == BinKind.Folder);
+        c.Check(vm.Bins.Count == 3 && interviews.Name.Contains("Interviews"), "Ordner angelegt");
+        vm.MoveMediaToBin(by70D!, interviews.Id);
+        vm.SelectedBin = interviews;
+        c.Check(vm.MediaView.Cast<object>().Count() == 1, "Ordner-Ansicht zeigt nur einsortierte Aufnahme");
+        vm.SelectedBin = vm.Bins[0];
+        vm.SearchText = "0042";
+        c.Check(vm.MediaView.Cast<MediaItemViewModel>().Single().Detection.Camera == CanonCamera.EosR6MarkII, "Suche nach Name");
+        vm.SearchText = string.Empty;
+        byR6!.Rating = 4;
+        byR6.KeywordsText = "See, Drohne";
+        vm.MinRatingFilter = 4;
+        c.Check(vm.MediaView.Cast<object>().Count() == 1, "Filter nach Bewertung");
+        vm.MinRatingFilter = 0;
+        vm.SearchText = "drohne";
+        c.Check(vm.MediaView.Cast<object>().Count() == 1, "Suche in Schlagwörtern");
+        vm.SearchText = string.Empty;
+        vm.KindFilter = 2;
+        c.Check(vm.MediaView.Cast<MediaItemViewModel>().All(m => m.IsAudioOnly), "Filter nur Ton");
+        vm.KindFilter = 0;
+        vm.SortMode = 2;
+        c.Check(vm.MediaView.Cast<MediaItemViewModel>().First() == byR6, "Sortierung nach Bewertung");
+        vm.SortMode = 0;
+
+        var syncVideo = imported.First(m => m.Name.StartsWith("MVI_0002", StringComparison.OrdinalIgnoreCase));
+        var recorder = imported.First(m => m.Name.StartsWith("ZOOM0001", StringComparison.OrdinalIgnoreCase));
+        c.Check(await vm.SyncPairAsync(syncVideo, recorder, quiet: true), "Ton-Synchronisation gefunden: " + syncVideo.SyncText);
+        c.Check(Math.Abs(syncVideo.Model.SyncedAudio!.OffsetSeconds - 0.75) < 0.02, $"Versatz stimmt (0,75 s erwartet, {syncVideo.Model.SyncedAudio.OffsetSeconds:0.000} s gefunden)");
+        var syncedClip = vm.PlaceMedia(syncVideo.Model, 1, 4, null, null)!;
+        var externalClip = vm.Project.AllClips.FirstOrDefault(cl => cl.MediaId == recorder.Model.Id && Math.Abs(cl.SourceIn - 1.75) < 0.02);
+        c.Check(externalClip is not null && externalClip.StartFrame == syncedClip.StartFrame && syncedClip.AudioMuted,
+            "Synchronisierter Ton liegt passend in der Timeline, Kameraton stumm");
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "medienpool.png"));
+        clipCount = vm.Project.AllClips.Count();
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");
@@ -275,6 +313,8 @@ public static class SmokeTest
         await vm.OpenProjectFileAsync(projectFile);
         c.Check(vm.Project.AllClips.Count() == clipCount && vm.MediaItems.Count == imported.Count, "Projekt wieder geladen");
         c.Check(vm.MediaItems.Count(m => m.Model.HasProxy) == needProxy.Count, "Proxys bleiben im Projekt gespeichert");
+        c.Check(vm.Bins.Count == 3 && vm.MediaItems.Any(m => m.Rating == 4 && m.KeywordsText.Contains("Drohne")) && vm.MediaItems.Any(m => m.HasSync),
+            "Ordner, Bewertung, Schlagwörter und Synchronisation gespeichert");
         c.Check(settings.Settings.RecentProjects.Contains(projectFile), "Zuletzt geöffnet gemerkt");
 
         // ---- Karten-Import (kopieren + Prüfsumme)

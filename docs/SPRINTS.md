@@ -11,8 +11,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 3 | Timeline-Oberfläche | ✅ fertig |
 | 4 | Vorschau & Proxys | ✅ fertig |
 | 5 | Ausgabe: Export-Dialog, Plattform-Vorlagen, Warteschlange (→ v0.5) | ✅ fertig |
-| 6 | Medien-Arbeitsbereich: Ordner, Metadaten, Bild-Ton-Synchronisation | ⏳ als Nächstes |
-| 7 | Schnellschnitt-Arbeitsbereich: Doppel-Timeline, Quellband, Einfügemodi | geplant |
+| 6 | Medien-Arbeitsbereich: Ordner, Metadaten, Bild-Ton-Synchronisation | ✅ fertig |
+| 7 | Schnellschnitt-Arbeitsbereich: Doppel-Timeline, Quellband, Einfügemodi | ⏳ als Nächstes |
 | 8 | Profi-Schnitt: Trimm-Modi, Keyframes, Geschwindigkeitsrampen, verschachtelte Clips | geplant |
 | 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | geplant |
 | 10 | Mehrspur, Multicam & Mischmodi | geplant |
@@ -68,7 +68,7 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Export-Warteschlange (mehrere Aufträge nacheinander)
 - Prüfung vor dem Export: fehlende Dateien, fehlende LUT, gemischte Bildraten, nicht konformierte Zeitlupe, Hochskalierung
 
-## Sprint 6 – Medien-Arbeitsbereich
+## Sprint 6 – Medien-Arbeitsbereich ✅
 - Ordner (Bins) im Medienpool, Aufnahmen per Ziehen einsortieren
 - Metadaten: Bewertung (Sterne), Schlagwörter, Notizen, Szene/Take; Suchen und Filtern
 - Bild-Ton-Synchronisation: externen Ton (Rekorder) per Wellenform automatisch an den Kameraton anlegen

@@ -127,6 +127,103 @@ public sealed partial class MediaItemViewModel : ObservableObject
     [ObservableProperty]
     private double _proxyProgress;
 
+    // ------------------------------------------------------------ Metadaten (Sprint 6)
+
+    public int Rating
+    {
+        get => Model.Rating;
+        set
+        {
+            var rating = Math.Clamp(value, 0, 5);
+            if (rating == Model.Rating)
+            {
+                return;
+            }
+
+            Model.Rating = rating;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(Stars));
+            _changed();
+        }
+    }
+
+    public string Stars => new string('★', Model.Rating) + new string('☆', 5 - Model.Rating);
+
+    public string KeywordsText
+    {
+        get => string.Join(", ", Model.Keywords);
+        set
+        {
+            Model.Keywords = MediaFilter.ParseKeywords(value);
+            OnPropertyChanged();
+            _changed();
+        }
+    }
+
+    public string Notes
+    {
+        get => Model.Notes;
+        set
+        {
+            Model.Notes = value ?? string.Empty;
+            OnPropertyChanged();
+            _changed();
+        }
+    }
+
+    public string Scene
+    {
+        get => Model.Scene;
+        set
+        {
+            Model.Scene = value ?? string.Empty;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SceneTakeText));
+            _changed();
+        }
+    }
+
+    public string Take
+    {
+        get => Model.Take;
+        set
+        {
+            Model.Take = value ?? string.Empty;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SceneTakeText));
+            _changed();
+        }
+    }
+
+    public string SceneTakeText => string.IsNullOrEmpty(Model.Scene) && string.IsNullOrEmpty(Model.Take)
+        ? string.Empty
+        : $"Szene {Model.Scene} · Take {Model.Take}";
+
+    public bool HasSync => Model.SyncedAudio is not null;
+
+    public string SyncText => Model.SyncedAudio is { } sync
+        ? $"Externer Ton verknüpft (Versatz {sync.OffsetSeconds:+0.000;-0.000} s, Sicherheit {sync.Confidence:P0})"
+        : "Kein externer Ton verknüpft.";
+
+    public bool ReplaceCameraAudio
+    {
+        get => Model.SyncedAudio?.ReplaceCameraAudio ?? true;
+        set
+        {
+            if (Model.SyncedAudio is { } sync)
+            {
+                sync.ReplaceCameraAudio = value;
+                OnPropertyChanged();
+                _changed();
+            }
+        }
+    }
+
+    /// <summary>Sortierschlüssel für „nach Aufnahmezeit“.</summary>
+    public DateTimeOffset RecordedSort => Model.First.CreationTime ?? DateTimeOffset.MaxValue;
+
+    public double DurationSeconds => Model.Duration.TotalSeconds;
+
     public void RefreshAll() => OnPropertyChanged(string.Empty);
 
     public static string FormatSize(long bytes) => bytes switch

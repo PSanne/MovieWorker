@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MovieWorker.App.Services;
@@ -38,6 +40,11 @@ public sealed partial class MainViewModel : ObservableObject
         ExportQueue.JobFinished += (_, job) => StatusText = job.State == ExportJobState.Done
             ? $"Export fertig: {job.FileName}"
             : $"Export {job.StateText.ToLowerInvariant()}: {job.FileName} – {job.Detail}";
+        AudioSync = new AudioSyncService(tools);
+        MediaView = CollectionViewSource.GetDefaultView(MediaItems);
+        MediaView.Filter = o => o is MediaItemViewModel m && CurrentFilter.Matches(m.Model);
+        RebuildBins();
+        ApplySort();
         RefreshRecentProjects();
         StatusText = tools.IsAvailable ? "Bereit." : tools.StatusText;
     }
@@ -87,6 +94,78 @@ public sealed partial class MainViewModel : ObservableObject
 
     public ObservableCollection<MediaItemViewModel> MediaItems { get; } = [];
 
+    /// <summary>Gefilterte und sortierte Ansicht des Medienpools.</summary>
+    public ICollectionView MediaView { get; }
+
+    public AudioSyncService AudioSync { get; }
+
+    public ObservableCollection<BinViewModel> Bins { get; } = [];
+
+    /// <summary>Ordner, in die eine Aufnahme einsortiert werden kann (inkl. „Nicht einsortiert“).</summary>
+    public IEnumerable<BinViewModel> TargetBins => Bins.Where(b => b.Kind != BinKind.All);
+
+    public IEnumerable<MediaItemViewModel> AudioMediaItems => MediaItems.Where(m => m.IsAudioOnly);
+
+    public IReadOnlyList<string> RatingFilters { get; } = ["Alle Bewertungen", "★ und mehr", "★★ und mehr", "★★★ und mehr", "★★★★ und mehr", "★★★★★"];
+
+    public IReadOnlyList<string> KindFilters { get; } = ["Alles", "Nur Video", "Nur Ton"];
+
+    public IReadOnlyList<string> SortModes { get; } = ["Name", "Aufnahmezeit", "Bewertung", "Länge"];
+
+    [ObservableProperty]
+    private BinViewModel? _selectedBin;
+
+    [ObservableProperty]
+    private string _searchText = string.Empty;
+
+    [ObservableProperty]
+    private int _minRatingFilter;
+
+    [ObservableProperty]
+    private int _kindFilter;
+
+    [ObservableProperty]
+    private int _sortMode;
+
+    [ObservableProperty]
+    private MediaItemViewModel? _selectedSyncAudio;
+
+    [ObservableProperty]
+    private bool _isSyncing;
+
+    private MediaFilter CurrentFilter => new(
+        SearchText,
+        MinRatingFilter,
+        (MediaKindFilter)KindFilter,
+        BinId: SelectedBin?.Kind == BinKind.Folder ? SelectedBin.Id : null,
+        OnlyUnsorted: SelectedBin?.Kind == BinKind.Unsorted);
+
+    partial void OnSelectedBinChanged(BinViewModel? value) => MediaView.Refresh();
+
+    partial void OnSearchTextChanged(string value) => MediaView.Refresh();
+
+    partial void OnMinRatingFilterChanged(int value) => MediaView.Refresh();
+
+    partial void OnKindFilterChanged(int value) => MediaView.Refresh();
+
+    partial void OnSortModeChanged(int value) => ApplySort();
+
+    /// <summary>Ordner der ausgewählten Aufnahme (für den Inspektor).</summary>
+    public BinViewModel? SelectedMediaBin
+    {
+        get => SelectedMedia is { } m ? TargetBins.FirstOrDefault(b => b.Id == m.Model.BinId) : null;
+        set
+        {
+            if (SelectedMedia is { } m && value is not null && m.Model.BinId != value.Id)
+            {
+                m.Model.BinId = value.Id;
+                Editor.NotifyMediaChanged();
+                MediaView.Refresh();
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public ObservableCollection<string> RecentProjects { get; } = [];
 
     public MovieProject Project => Editor.Project;
@@ -109,7 +188,7 @@ public sealed partial class MainViewModel : ObservableObject
     private bool _isDirty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSelectedMedia))]
+    [NotifyPropertyChangedFor(nameof(HasSelectedMedia), nameof(SelectedMediaBin))]
     [NotifyCanExecuteChangedFor(nameof(AddSelectedToTimelineCommand), nameof(RemoveSelectedMediaCommand))]
     private MediaItemViewModel? _selectedMedia;
 
@@ -365,6 +444,218 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    // ---------------------------------------------------------------- Ordner & Synchronisation (Sprint 6)
+
+    [RelayCommand]
+    public void NewBin()
+    {
+        var name = _dialogs.Prompt("Name des neuen Ordners:", "Neuer Ordner", "Neuer Ordner");
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        var bin = new MediaBin { Name = name };
+        Project.Bins.Add(bin);
+        Editor.NotifyMediaChanged();
+        RebuildBins();
+        SelectedBin = Bins.First(b => b.Id == bin.Id);
+
+        // Ausgewählte Aufnahme gleich einsortieren, wenn sie noch keinen Ordner hat.
+        if (SelectedMedia is { } m && m.Model.BinId is null)
+        {
+            m.Model.BinId = bin.Id;
+            MediaView.Refresh();
+        }
+    }
+
+    [RelayCommand]
+    private void RenameBin()
+    {
+        if (SelectedBin is not { Kind: BinKind.Folder, Bin: { } bin })
+        {
+            return;
+        }
+
+        var name = _dialogs.Prompt("Neuer Name des Ordners:", "Ordner umbenennen", bin.Name);
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            bin.Name = name;
+            Editor.NotifyMediaChanged();
+            SelectedBin.Refresh();
+            OnPropertyChanged(nameof(TargetBins));
+        }
+    }
+
+    [RelayCommand]
+    private void DeleteBin()
+    {
+        if (SelectedBin is not { Kind: BinKind.Folder, Bin: { } bin }
+            || !_dialogs.Confirm($"Ordner „{bin.Name}“ löschen? Die Aufnahmen darin bleiben erhalten (dann „nicht einsortiert“)."))
+        {
+            return;
+        }
+
+        foreach (var media in Project.Media.Where(m => m.BinId == bin.Id))
+        {
+            media.BinId = null;
+        }
+
+        Project.Bins.Remove(bin);
+        Editor.NotifyMediaChanged();
+        RebuildBins();
+    }
+
+    public void MoveMediaToBin(MediaItemViewModel item, Guid? binId)
+    {
+        item.Model.BinId = binId;
+        Editor.NotifyMediaChanged();
+        MediaView.Refresh();
+        OnPropertyChanged(nameof(SelectedMediaBin));
+    }
+
+    private void RebuildBins()
+    {
+        var selected = SelectedBin?.Id;
+        var selectedKind = SelectedBin?.Kind ?? BinKind.All;
+        Bins.Clear();
+        Bins.Add(new BinViewModel(BinKind.All));
+        Bins.Add(new BinViewModel(BinKind.Unsorted));
+        foreach (var bin in Project.Bins)
+        {
+            Bins.Add(new BinViewModel(BinKind.Folder, bin));
+        }
+
+        SelectedBin = Bins.FirstOrDefault(b => b.Kind == selectedKind && b.Id == selected) ?? Bins[0];
+        OnPropertyChanged(nameof(TargetBins));
+        OnPropertyChanged(nameof(SelectedMediaBin));
+    }
+
+    private void ApplySort()
+    {
+        MediaView.SortDescriptions.Clear();
+        var (property, direction) = SortMode switch
+        {
+            1 => (nameof(MediaItemViewModel.RecordedSort), ListSortDirection.Ascending),
+            2 => (nameof(MediaItemViewModel.Rating), ListSortDirection.Descending),
+            3 => (nameof(MediaItemViewModel.DurationSeconds), ListSortDirection.Descending),
+            _ => (nameof(MediaItemViewModel.Name), ListSortDirection.Ascending),
+        };
+        MediaView.SortDescriptions.Add(new SortDescription(property, direction));
+        if (property != nameof(MediaItemViewModel.Name))
+        {
+            MediaView.SortDescriptions.Add(new SortDescription(nameof(MediaItemViewModel.Name), ListSortDirection.Ascending));
+        }
+    }
+
+    /// <summary>Legt den gewählten externen Ton per Wellenform an die ausgewählte Kameraaufnahme an.</summary>
+    [RelayCommand]
+    public async Task<bool> SyncSelectedAsync()
+    {
+        if (SelectedMedia is not { IsAudioOnly: false } video || SelectedSyncAudio is not { } audio)
+        {
+            _dialogs.Error("Bitte eine Kameraaufnahme auswählen und darunter den externen Ton (z. B. vom Rekorder) wählen.");
+            return false;
+        }
+
+        return await SyncPairAsync(video, audio, quiet: false);
+    }
+
+    public async Task<bool> SyncPairAsync(MediaItemViewModel video, MediaItemViewModel audio, bool quiet)
+    {
+        if (!video.Model.First.HasAudio)
+        {
+            if (!quiet)
+            {
+                _dialogs.Error("Diese Aufnahme hat keinen Kameraton – ohne Ton lässt sich nicht synchronisieren.");
+            }
+
+            return false;
+        }
+
+        IsSyncing = true;
+        StatusText = $"Synchronisiere „{video.Name}“ mit „{audio.Name}“ …";
+        try
+        {
+            var result = await AudioSync.SyncAsync(video.Model, audio.Model);
+            if (!result.IsReliable)
+            {
+                StatusText = $"Keine eindeutige Übereinstimmung zwischen „{video.Name}“ und „{audio.Name}“ gefunden.";
+                if (!quiet)
+                {
+                    _dialogs.Error(StatusText + "\nTipp: Bei der Aufnahme einmal deutlich klatschen – das hilft der Synchronisation.");
+                }
+
+                return false;
+            }
+
+            video.Model.SyncedAudio = new SyncedAudio
+            {
+                AudioMediaId = audio.Model.Id,
+                OffsetSeconds = result.OffsetSeconds,
+                Confidence = result.Confidence,
+            };
+            video.RefreshAll();
+            Editor.NotifyMediaChanged();
+            StatusText = $"Synchronisiert: Versatz {result.OffsetSeconds:+0.000;-0.000} s (Sicherheit {result.Confidence:P0}). Beim Einfügen kommt der externe Ton mit.";
+            return true;
+        }
+        catch (Exception ex) when (ex is Core.Media.FfmpegException or IOException or InvalidOperationException)
+        {
+            StatusText = "Synchronisation fehlgeschlagen: " + ex.Message;
+            return false;
+        }
+        finally
+        {
+            IsSyncing = false;
+        }
+    }
+
+    /// <summary>Versucht jede Kameraaufnahme ohne Verknüpfung mit allen Tonaufnahmen und nimmt die beste.</summary>
+    [RelayCommand]
+    public async Task<int> AutoSyncAllAsync()
+    {
+        var audios = MediaItems.Where(m => m.IsAudioOnly).ToList();
+        var count = 0;
+        foreach (var video in MediaItems.Where(m => !m.IsAudioOnly && !m.HasSync && m.Model.First.HasAudio).ToList())
+        {
+            (MediaItemViewModel Audio, SyncResult Result)? best = null;
+            foreach (var audio in audios)
+            {
+                var result = await AudioSync.SyncAsync(video.Model, audio.Model);
+                if (result.IsReliable && (best is null || result.Confidence > best.Value.Result.Confidence))
+                {
+                    best = (audio, result);
+                }
+            }
+
+            if (best is { } match)
+            {
+                video.Model.SyncedAudio = new SyncedAudio
+                {
+                    AudioMediaId = match.Audio.Model.Id, OffsetSeconds = match.Result.OffsetSeconds, Confidence = match.Result.Confidence,
+                };
+                video.RefreshAll();
+                count++;
+            }
+        }
+
+        Editor.NotifyMediaChanged();
+        StatusText = count == 0 ? "Keine passenden Ton-Aufnahmen gefunden." : $"{count} Aufnahme(n) mit externem Ton synchronisiert.";
+        return count;
+    }
+
+    [RelayCommand]
+    private void RemoveSync()
+    {
+        if (SelectedMedia is { HasSync: true } media)
+        {
+            media.Model.SyncedAudio = null;
+            media.RefreshAll();
+            Editor.NotifyMediaChanged();
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(HasSelectedMedia))]
     private async Task CreateProxyForSelectedAsync()
     {
@@ -432,30 +723,53 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Hängt eine Aufnahme (oder einen Ausschnitt) ans Ende der passenden Spur an.</summary>
-    public TimelineClip AddToTimeline(MediaItem media, double sourceIn = 0, double? sourceOut = null)
+    public TimelineClip AddToTimeline(MediaItem media, double sourceIn = 0, double? sourceOut = null) =>
+        PlaceMedia(media, sourceIn, sourceOut, null, null)
+        ?? throw new InvalidOperationException("Anhängen am Ende ist immer möglich.");
+
+    /// <summary>
+    /// Legt eine Aufnahme in die Timeline – am Ende oder an <paramref name="start"/>. Ist externer Ton synchronisiert,
+    /// kommt er passend auf eine Tonspur (und der Kameraton wird auf Wunsch stummgeschaltet).
+    /// </summary>
+    public TimelineClip? PlaceMedia(MediaItem media, double sourceIn, double? sourceOut, long? start, Guid? trackId)
     {
         AdoptSettingsIfFirstClip(media);
-        var track = media.IsAudioOnly
-            ? Project.AudioTracks.First()
-            : Project.VideoTracks.First();
+        var kind = media.IsAudioOnly ? TrackKind.Audio : TrackKind.Video;
+        var track = Project.Tracks.FirstOrDefault(t => t.Id == trackId && t.Kind == kind) ?? Project.Tracks.First(t => t.Kind == kind);
         var clip = Editor.CreateClip(media, sourceIn, sourceOut);
         ApplyDefaultColor(clip, media);
-        Editor.Append(track, clip);
+
+        TimelineClip? audioClip = null;
+        long audioOffset = 0;
+        var rate = Project.Settings.FrameRate;
+        if (!media.IsAudioOnly && media.SyncedAudio is { } sync && Project.FindMedia(sync.AudioMediaId) is { } audio
+            && SyncedAudioPlacement.For(clip, sync.OffsetSeconds, audio.Duration.TotalSeconds, rate) is { } placement)
+        {
+            audioClip = Editor.CreateClip(audio, placement.SourceIn, null);
+            audioClip.LengthFrames = placement.LengthFrames;
+            audioClip.Name = audio.Name + " (synchron)";
+            audioOffset = placement.StartOffsetFrames;
+            if (sync.ReplaceCameraAudio)
+            {
+                clip.AudioMuted = true;
+            }
+        }
+
+        if (!Editor.InsertWithAudio(track, clip, start, audioClip, audioOffset))
+        {
+            return null;
+        }
+
         SelectedClipId = clip.Id;
-        StatusText = $"„{media.Name}“ in {track.Name} eingefügt.";
+        StatusText = $"„{media.Name}“ in {track.Name} eingefügt" + (audioClip is null ? "." : " – mit synchronisiertem externem Ton.");
         return clip;
     }
 
     /// <summary>Fügt einen Ausschnitt am Abspielkopf ein (nur, wenn dort auf der Spur Platz ist).</summary>
     public bool InsertRangeAtPlayhead(MediaItem media, double sourceIn, double? sourceOut)
     {
-        AdoptSettingsIfFirstClip(media);
-        var track = media.IsAudioOnly ? Project.AudioTracks.First() : Project.VideoTracks.First();
-        var clip = Editor.CreateClip(media, sourceIn, sourceOut);
-        ApplyDefaultColor(clip, media);
-        if (Editor.Insert(track, clip, PlayheadFrame))
+        if (PlaceMedia(media, sourceIn, sourceOut, PlayheadFrame, null) is { } clip)
         {
-            SelectedClipId = clip.Id;
             PlayheadFrame = clip.EndFrame;
             StatusText = $"„{media.Name}“ am Abspielkopf eingefügt.";
             return true;
@@ -501,15 +815,8 @@ public sealed partial class MainViewModel : ObservableObject
             return false;
         }
 
-        AdoptSettingsIfFirstClip(media);
-        var kind = media.IsAudioOnly ? TrackKind.Audio : TrackKind.Video;
-        var track = Project.Tracks.FirstOrDefault(t => t.Id == trackId && t.Kind == kind) ?? Project.Tracks.First(t => t.Kind == kind);
-        var clip = Editor.CreateClip(media);
-        ApplyDefaultColor(clip, media);
-        if (Editor.Insert(track, clip, frame))
+        if (PlaceMedia(media, 0, null, frame, trackId) is not null)
         {
-            SelectedClipId = clip.Id;
-            StatusText = $"„{media.Name}“ in {track.Name} eingefügt.";
             return true;
         }
 
@@ -772,6 +1079,7 @@ public sealed partial class MainViewModel : ObservableObject
             SelectedMedia = MediaItems.FirstOrDefault();
             ProjectPath = path;
             IsDirty = false;
+            RebuildBins();
         }
         finally
         {
@@ -785,6 +1093,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var vm = new MediaItemViewModel(media, () => Editor.NotifyMediaChanged());
         MediaItems.Add(vm);
+        OnPropertyChanged(nameof(AudioMediaItems));
         _ = LoadThumbnailAsync(vm);
         return vm;
     }

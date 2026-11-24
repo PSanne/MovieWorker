@@ -26,6 +26,9 @@ public interface IDialogService
 
     DialogAnswer AskYesNoCancel(string message, string title = "MovieWorker");
 
+    /// <summary>Fragt einen kurzen Text ab (z. B. Ordnername). null = abgebrochen.</summary>
+    string? Prompt(string message, string title, string defaultValue);
+
     /// <summary>Öffnet ein eigenes Fenster mit ViewModel modal. Liefert true bei „OK“.</summary>
     bool ShowDialog(object viewModel);
 }

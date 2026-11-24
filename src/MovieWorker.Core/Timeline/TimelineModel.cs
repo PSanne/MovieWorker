@@ -205,6 +205,9 @@ public sealed class MovieProject
     /// <summary>Medienpool: alle importierten Aufnahmen (auch die, die noch nicht in der Timeline liegen).</summary>
     public List<MediaItem> Media { get; set; } = [];
 
+    /// <summary>Ordner (Bins) des Medienpools.</summary>
+    public List<MediaBin> Bins { get; set; } = [];
+
     public MediaItem? FindMedia(Guid? id) => id is { } value ? Media.FirstOrDefault(m => m.Id == value) : null;
 
     [JsonIgnore]
@@ -251,6 +254,7 @@ public sealed class MovieProject
         Settings = Settings.Clone(),
         Tracks = Tracks.Select(t => t.Clone()).ToList(),
         Media = [.. Media],
+        Bins = [.. Bins],
         MarkIn = MarkIn,
         MarkOut = MarkOut,
     };

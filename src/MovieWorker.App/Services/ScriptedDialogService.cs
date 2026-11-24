@@ -27,6 +27,8 @@ public sealed class ScriptedDialogService(Action<string> log) : IDialogService
 
     public DialogAnswer AskYesNoCancel(string message, string title = "MovieWorker") => Next<DialogAnswer?>() ?? DialogAnswer.No;
 
+    public string? Prompt(string message, string title, string defaultValue) => Next<string>() ?? defaultValue;
+
     public bool ShowDialog(object viewModel)
     {
         log($"Dialog: {viewModel.GetType().Name}");

@@ -25,6 +25,23 @@ public sealed class MediaItem
 
     public DateTimeOffset ImportedAt { get; set; } = DateTimeOffset.Now;
 
+    /// <summary>Ordner im Medienpool (null = nicht einsortiert).</summary>
+    public Guid? BinId { get; set; }
+
+    /// <summary>Bewertung 0–5 Sterne.</summary>
+    public int Rating { get; set; }
+
+    public List<string> Keywords { get; set; } = [];
+
+    public string Notes { get; set; } = string.Empty;
+
+    public string Scene { get; set; } = string.Empty;
+
+    public string Take { get; set; } = string.Empty;
+
+    /// <summary>Per Ton-Synchronisation verknüpfter externer Ton.</summary>
+    public SyncedAudio? SyncedAudio { get; set; }
+
     [JsonIgnore]
     public MediaInfo First => Parts[0];
 
