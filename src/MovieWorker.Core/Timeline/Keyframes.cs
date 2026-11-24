@@ -126,6 +126,49 @@ public sealed class KeyframeTrack
     }
 }
 
+/// <summary>Wie eine obere Videospur mit dem Bild darunter verrechnet wird.</summary>
+public enum BlendMode
+{
+    Normal,
+    Multiply,
+    Screen,
+    Overlay,
+    SoftLight,
+    Darken,
+    Lighten,
+    Difference,
+    Add,
+}
+
+public static class BlendModeInfo
+{
+    public static string FfmpegName(BlendMode mode) => mode switch
+    {
+        BlendMode.Multiply => "multiply",
+        BlendMode.Screen => "screen",
+        BlendMode.Overlay => "overlay",
+        BlendMode.SoftLight => "softlight",
+        BlendMode.Darken => "darken",
+        BlendMode.Lighten => "lighten",
+        BlendMode.Difference => "difference",
+        BlendMode.Add => "addition",
+        _ => "normal",
+    };
+
+    public static string Label(BlendMode mode) => mode switch
+    {
+        BlendMode.Multiply => "Multiplizieren",
+        BlendMode.Screen => "Negativ multiplizieren",
+        BlendMode.Overlay => "Überlagern",
+        BlendMode.SoftLight => "Weiches Licht",
+        BlendMode.Darken => "Abdunkeln",
+        BlendMode.Lighten => "Aufhellen",
+        BlendMode.Difference => "Differenz",
+        BlendMode.Add => "Addieren",
+        _ => "Normal",
+    };
+}
+
 /// <summary>Feste Bildlage eines Clips (gilt, solange es für die Eigenschaft keine Keyframes gibt).</summary>
 public sealed class ClipTransform
 {
@@ -138,6 +181,24 @@ public sealed class ClipTransform
     public double Rotation { get; set; }
 
     public double Opacity { get; set; } = 100;
+
+    /// <summary>Zuschneiden in % je Seite.</summary>
+    public double CropLeft { get; set; }
+
+    public double CropRight { get; set; }
+
+    public double CropTop { get; set; }
+
+    public double CropBottom { get; set; }
+
+    public bool FlipHorizontal { get; set; }
+
+    public bool FlipVertical { get; set; }
+
+    /// <summary>Mischmodus über den Spuren darunter (nur Videospuren ab V2).</summary>
+    public BlendMode Blend { get; set; } = BlendMode.Normal;
+
+    public bool HasCrop => CropLeft > 0.001 || CropRight > 0.001 || CropTop > 0.001 || CropBottom > 0.001;
 
     public ClipTransform Clone() => (ClipTransform)MemberwiseClone();
 

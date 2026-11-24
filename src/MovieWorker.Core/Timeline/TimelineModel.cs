@@ -138,6 +138,18 @@ public sealed class TimelineClip
     /// <summary>Übergang vom vorherigen Clip zu diesem (null = harter Schnitt).</summary>
     public Transition? TransitionIn { get; set; }
 
+    /// <summary>Kameras eines Multicam-Clips (null = normaler Clip).</summary>
+    public List<MulticamAngle>? MulticamAngles { get; set; }
+
+    /// <summary>Sichtbare Kamera (Index in <see cref="MulticamAngles"/>).</summary>
+    public int ActiveAngle { get; set; }
+
+    /// <summary>Kamera, deren Ton verwendet wird.</summary>
+    public int AudioAngle { get; set; }
+
+    [JsonIgnore]
+    public bool IsMulticam => MulticamAngles is { Count: > 0 };
+
     /// <summary>Titel (nur auf Titelspuren).</summary>
     public TitleSpec? Title { get; set; }
 
@@ -212,7 +224,8 @@ public sealed class TimelineClip
     public bool HasTransform =>
         Keyframes.Any(k => k.Property != AnimatedProperty.Volume && k.Keys.Count > 0)
         || Math.Abs(Transform.PositionX) > 1e-6 || Math.Abs(Transform.PositionY) > 1e-6
-        || Math.Abs(Transform.Scale - 100) > 1e-6 || Math.Abs(Transform.Rotation) > 1e-6 || Math.Abs(Transform.Opacity - 100) > 1e-6;
+        || Math.Abs(Transform.Scale - 100) > 1e-6 || Math.Abs(Transform.Rotation) > 1e-6 || Math.Abs(Transform.Opacity - 100) > 1e-6
+        || Transform.HasCrop || Transform.FlipHorizontal || Transform.FlipVertical;
 
     [JsonIgnore]
     public long EndFrame => StartFrame + LengthFrames;
@@ -239,6 +252,7 @@ public sealed class TimelineClip
         copy.Keyframes = Keyframes.Select(k => k.Clone()).ToList();
         copy.NestedTracks = NestedTracks?.Select(t => t.Clone()).ToList();
         copy.TransitionIn = TransitionIn?.Clone();
+        copy.MulticamAngles = MulticamAngles?.Select(a => a.Clone()).ToList();
         copy.Title = Title?.Clone();
         return copy;
     }

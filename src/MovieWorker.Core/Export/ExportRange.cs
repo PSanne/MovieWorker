@@ -21,6 +21,18 @@ public static class ExportRange
             var kept = new List<TimelineClip>();
             foreach (var clip in track.Clips)
             {
+                if (clip.IsTitle)
+                {
+                    // Titel nicht kürzen: Ihre Animation bezieht sich auf Anfang und Ende des ganzen Titels.
+                    if (clip.EndFrame > start && clip.StartFrame < end)
+                    {
+                        clip.StartFrame -= start;
+                        kept.Add(clip);
+                    }
+
+                    continue;
+                }
+
                 var clipStart = Math.Max(clip.StartFrame, start);
                 var clipEnd = Math.Min(clip.EndFrame, end);
                 if (clipEnd <= clipStart)

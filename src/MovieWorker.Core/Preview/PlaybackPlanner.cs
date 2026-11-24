@@ -28,7 +28,7 @@ public static class PlaybackPlanner
 {
     /// <summary>Das sichtbare Bild: der Clip der obersten Videospur an dieser Stelle.</summary>
     public static PlaybackSource? VideoAt(MovieProject project, long frame) =>
-        NestFlattener.Flatten(project).VideoTracks.Reverse()
+        MulticamResolver.Resolve(NestFlattener.Flatten(project)).VideoTracks.Reverse()
             .Where(t => !t.Muted)
             .Select(t => (Track: t, Clip: t.ClipAt(frame)))
             .Where(x => x.Clip is { HasVideo: true })
@@ -37,7 +37,7 @@ public static class PlaybackPlanner
 
     /// <summary>Alles, was an dieser Stelle zu hören ist (Kameraton von V1 und alle Tonspuren).</summary>
     public static IReadOnlyList<PlaybackSource> AudioAt(MovieProject project, long frame) =>
-        NestFlattener.Flatten(project).Tracks
+        MulticamResolver.Resolve(NestFlattener.Flatten(project)).Tracks
             .Select(t => (Track: t, Clip: t.ClipAt(frame)))
             .Where(x => x.Clip is { HasAudio: true })
             .Select(x => Source(project, x.Track, x.Clip!, frame))

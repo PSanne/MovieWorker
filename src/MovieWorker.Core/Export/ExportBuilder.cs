@@ -40,7 +40,7 @@ public static class ExportBuilder
             totalFrames = project.DurationFrames;
         }
 
-        project = Timeline.NestFlattener.Flatten(project);
+        project = Timeline.MulticamResolver.Resolve(Timeline.NestFlattener.Flatten(project));
         var settings = project.Settings;
         var rate = settings.FrameRate;
         var (width, height) = CanvasSize(settings, preset);
@@ -156,15 +156,34 @@ public static class ExportBuilder
 
         JoinSegments(graph, segments, rate);
 
+        // ---------- Obere Videospuren (Bild-in-Bild, B-Roll, Mischmodi) ----------
+        var composite = "[vjoin]";
+        var overlayAudio = new List<(TimelineClip Clip, TimelineTrack Track, List<int> Parts)>();
+        var layer = 0;
+        foreach (var track in project.VideoTracks.Skip(1).Where(t => !t.Muted))
+        {
+            foreach (var clip in track.OrderedClips.Where(c => c.SourcePaths.Count > 0 && c.HasVideo))
+            {
+                var parts = AddClipInputs(clip, rate, inputs, ref inputIndex);
+                composite = AddOverlay(graph, composite, clip, parts, layer, width, height, rate, pixelFormat);
+                if (clip.HasAudio && !clip.AudioMuted && Math.Abs(clip.Speed - 1) < 1e-9)
+                {
+                    overlayAudio.Add((clip, track, parts));
+                }
+
+                layer++;
+            }
+        }
+
         // ---------- Titel ----------
         var titles = TitleRenderer.Filters(project, width, height);
         if (titles.Count > 0)
         {
-            graph.Append(CultureInfo.InvariantCulture, $"[vjoin]{string.Join(',', titles)}[vcat];");
+            graph.Append(CultureInfo.InvariantCulture, $"{composite}{string.Join(',', titles)}[vcat];");
         }
         else
         {
-            graph.Append("[vjoin]null[vcat];");
+            graph.Append(CultureInfo.InvariantCulture, $"{composite}null[vcat];");
         }
 
         // ---------- Ausgabeformat (Hochformat, Quadrat …) und Bildrate ----------
@@ -197,6 +216,19 @@ public static class ExportBuilder
             }
         }
 
+        foreach (var (clip, track, parts) in overlayAudio)
+        {
+            var audioIn = ConcatParts(graph, parts, "a", $"oa{audioClip}");
+            var duration = FfmpegArgs.Seconds(rate.FramesToSeconds(clip.LengthFrames));
+            var delayMs = (long)Math.Round(rate.FramesToSeconds(clip.StartFrame) * 1000);
+            var af = new List<string> { "asetpts=PTS-STARTPTS", AudioFormat, $"atrim=duration={duration}" };
+            af.AddRange(VolumeAndFades(clip, rate, track.VolumeDb));
+            af.Add($"adelay=delays={delayMs}:all=1");
+            graph.Append(CultureInfo.InvariantCulture, $"{audioIn}{string.Join(',', af)}[t{audioClip}];");
+            mixLabels.Add($"[t{audioClip}]");
+            audioClip++;
+        }
+
         if (mixLabels.Count == 1)
         {
             graph.Append("[acam]anull[aout]");
@@ -210,6 +242,16 @@ public static class ExportBuilder
         if (preset.AudioOnly)
         {
             graph.Append(";[vout]nullsink");
+        }
+
+        if (preset.IsStillImage)
+        {
+            // Ein einzelnes Bild auf die Standardausgabe (kein Fortschritt dorthin, sonst wäre das PNG kaputt).
+            graph.Append(";[aout]anullsink");
+            var stillArgs = new List<string> { "-v", "error", "-nostdin" };
+            stillArgs.AddRange(inputs);
+            stillArgs.AddRange(["-filter_complex", graph.ToString(), "-map", "[vout]", "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"]);
+            return new FfmpegJob(stillArgs, rate.FramesToSeconds(totalFrames), "-");
         }
 
         var args = new List<string> { "-y", "-v", "error", "-nostdin" };
@@ -232,6 +274,99 @@ public static class ExportBuilder
         args.AddRange(["-ar", "48000", "-progress", "pipe:1", "-nostats", outputPath]);
         return new FfmpegJob(args, rate.FramesToSeconds(totalFrames), outputPath);
     }
+
+    /// <summary>Exaktes Vorschaubild eines Timeline-Bildes – über dieselbe Kette wie der Export.</summary>
+    public static FfmpegJob BuildStill(MovieProject project, long frame, int height) =>
+        Build(project, ExportPreset.StillImage(height), "-", frame, frame + 1);
+
+    /// <summary>
+    /// Legt einen Clip einer oberen Videospur über das bisherige Bild: als Bild-in-Bild (Größe, Lage, Zuschnitt,
+    /// Drehung, Deckkraft; Lage auch per Keyframes) oder bildfüllend mit Mischmodus. Liefert das neue Label.
+    /// </summary>
+    private static string AddOverlay(StringBuilder graph, string below, TimelineClip clip, List<int> parts, int layer,
+        int width, int height, Time.FrameRate rate, string pixelFormat)
+    {
+        string N(double v) => v.ToString("0.######", CultureInfo.InvariantCulture);
+        var start = rate.FramesToSeconds(clip.StartFrame);
+        var duration = rate.FramesToSeconds(clip.LengthFrames);
+        var end = start + duration;
+        var videoIn = ConcatParts(graph, parts, "v", $"ocv{layer}");
+        var vf = new List<string> { $"setpts=(PTS-STARTPTS)/{N(clip.Speed)}" };
+        if (FfmpegArgs.ColorFilter(clip) is { } color)
+        {
+            vf.Add(color);
+        }
+
+        vf.Add($"fps={rate.ToFfmpeg()}");
+        var t = clip.Transform;
+        var output = $"[comp{layer}]";
+
+        if (t.Blend != BlendMode.Normal)
+        {
+            // Mischmodus: bildfüllend verrechnen (gbrp für saubere Farbmathematik).
+            vf.Add($"scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos");
+            vf.Add($"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2");
+            vf.Add("setsar=1");
+            vf.AddRange(TransformFilters.CropAndFlip(t, width, height, padBack: true));
+            vf.Add($"trim=duration={N(duration)}");
+            vf.Add($"tpad=start_duration={N(start)}:color=black");
+            vf.Add("format=gbrp");
+            graph.Append(CultureInfo.InvariantCulture, $"{videoIn}{string.Join(',', vf)}[ov{layer}];");
+            graph.Append(CultureInfo.InvariantCulture, $"{below}format=gbrp[ob{layer}];");
+            graph.Append(CultureInfo.InvariantCulture,
+                $"[ob{layer}][ov{layer}]blend=all_mode={BlendModeInfo.FfmpegName(t.Blend)}:all_opacity={N(Math.Clamp(t.Opacity, 0, 100) / 100)}:enable='between(t,{N(start)},{N(end)})',format={pixelFormat}{output};");
+            return output;
+        }
+
+        // Bild-in-Bild / B-Roll
+        var scale = Math.Clamp(clip.IsAnimated(AnimatedProperty.Scale) ? clip.ValueAt(AnimatedProperty.Scale, 0) : t.Scale, 1, 400) / 100;
+        vf.Add($"scale={Even(width * scale)}:{Even(height * scale)}:force_original_aspect_ratio=decrease:flags=lanczos");
+        vf.Add("setsar=1");
+        vf.AddRange(TransformFilters.CropAndFlip(t, Even(width * scale), Even(height * scale), padBack: false));
+        vf.Add("format=yuva420p");
+        var rotation = clip.IsAnimated(AnimatedProperty.Rotation) ? clip.ValueAt(AnimatedProperty.Rotation, 0) : t.Rotation;
+        if (Math.Abs(rotation) > 1e-6)
+        {
+            vf.Add($"rotate=a={N(rotation)}*PI/180:c=none:ow='hypot(iw,ih)':oh=ow");
+        }
+
+        if (clip.KeyframesFor(AnimatedProperty.Opacity) is { } opacityKeys)
+        {
+            var o = opacityKeys.ToExpression("T", f => rate.FramesToSeconds(f));
+            vf.Add($"geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='alpha(X,Y)*max(0,min(1,({o})/100))'");
+        }
+        else if (t.Opacity < 99.999)
+        {
+            vf.Add($"colorchannelmixer=aa={N(Math.Clamp(t.Opacity, 0, 100) / 100)}");
+        }
+
+        vf.Add($"trim=duration={N(duration)}");
+        if (clip.FadeInFrames > 0)
+        {
+            vf.Add($"fade=t=in:st=0:d={N(rate.FramesToSeconds(clip.FadeInFrames))}:alpha=1");
+        }
+
+        if (clip.FadeOutFrames > 0)
+        {
+            var d = rate.FramesToSeconds(clip.FadeOutFrames);
+            vf.Add($"fade=t=out:st={N(duration - d)}:d={N(d)}:alpha=1");
+        }
+
+        vf.Add($"setpts=PTS-STARTPTS+{N(start)}/TB");
+        graph.Append(CultureInfo.InvariantCulture, $"{videoIn}{string.Join(',', vf)}[ov{layer}];");
+
+        string Pos(AnimatedProperty property, double size) =>
+            clip.KeyframesFor(property) is { } keys
+                ? $"({keys.ToExpression($"(t-{N(start)})", f => rate.FramesToSeconds(f))})/100*{N(size)}"
+                : N(t.Get(property) / 100 * size);
+        var x = $"(W-w)/2+{Pos(AnimatedProperty.PositionX, width)}";
+        var y = $"(H-h)/2+{Pos(AnimatedProperty.PositionY, height)}";
+        graph.Append(CultureInfo.InvariantCulture,
+            $"{below}[ov{layer}]overlay=x='{x}':y='{y}':eval=frame:enable='between(t,{N(start)},{N(end)})':eof_action=pass,format={pixelFormat}{output};");
+        return output;
+    }
+
+    private static int Even(double value) => Math.Max(2, (int)Math.Round(value / 2) * 2);
 
     /// <summary>
     /// Fügt die Abschnitte der Hauptspur zusammen: ohne Übergang per <c>concat</c>, mit Übergang per

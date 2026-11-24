@@ -83,6 +83,14 @@ public sealed class TimelineView : FrameworkElement
     private static readonly Brush VideoClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x3B, 0x6F, 0xB6)));
     private static readonly Brush AudioClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x2F, 0x8F, 0x5B)));
     private static readonly Brush NestedClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x7A, 0x55, 0xC2)));
+    private static readonly Brush[] MulticamBrushes =
+    [
+        Freeze(new SolidColorBrush(Color.FromRgb(0x3B, 0x6F, 0xB6))),
+        Freeze(new SolidColorBrush(Color.FromRgb(0x2E, 0x8C, 0x8C))),
+        Freeze(new SolidColorBrush(Color.FromRgb(0x9C, 0x4F, 0x9C))),
+        Freeze(new SolidColorBrush(Color.FromRgb(0xA8, 0x6B, 0x2D))),
+    ];
+
     private static readonly Brush TitleClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xC9, 0x6A, 0x1E)));
     private static readonly Brush TransitionBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)));
     private static readonly Brush KeyframeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xD2, 0x4A)));
@@ -426,7 +434,8 @@ public sealed class TimelineView : FrameworkElement
 
         var isVideo = row.Track.Kind == TrackKind.Video;
         dc.PushOpacity(ghostSource ? 0.35 : row.Track.Muted ? 0.45 : 1);
-        var fill = clip.IsTitle ? TitleClipBrush : clip.IsNested ? NestedClipBrush : isVideo ? VideoClipBrush : AudioClipBrush;
+        var fill = clip.IsTitle ? TitleClipBrush : clip.IsNested ? NestedClipBrush : clip.IsMulticam ? MulticamBrushes[clip.ActiveAngle % MulticamBrushes.Length]
+            : isVideo ? VideoClipBrush : AudioClipBrush;
         dc.DrawRoundedRectangle(fill, ClipPen, rect, 3, 3);
         dc.PushClip(new RectangleGeometry(rect));
 
@@ -483,7 +492,9 @@ public sealed class TimelineView : FrameworkElement
         }
 
         // Name und Kennzeichen
-        var label = clip.IsTitle ? "T  " + clip.Name : clip.Name;
+        var label = clip.IsTitle ? "T  " + clip.Name
+            : clip.IsMulticam ? $"🎥 {clip.ActiveAngle + 1}: {clip.MulticamAngles![Math.Clamp(clip.ActiveAngle, 0, clip.MulticamAngles.Count - 1)].Name}"
+            : clip.Name;
         if (Math.Abs(clip.Speed - 1) > 1e-6)
         {
             label += $"  ×{clip.Speed.ToString("0.###", CultureInfo.CurrentCulture)}";

@@ -15,8 +15,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 7 | Schnellschnitt-Arbeitsbereich: Doppel-Timeline, Quellband, Einfügemodi | ✅ fertig |
 | 8 | Profi-Schnitt: Trimm-Modi, Keyframes, Geschwindigkeitsrampen, verschachtelte Clips | ✅ fertig |
 | 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | ✅ fertig |
-| 10 | Mehrspur, Multicam & Mischmodi | ⏳ als Nächstes |
-| 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | geplant |
+| 10 | Mehrspur, Multicam & Mischmodi | ✅ fertig |
+| 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | ⏳ als Nächstes |
 | 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | geplant |
 | 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | geplant |
 | 14 | Ton II: ADR, Sprachaufnahme, Surround/räumlicher Ton | geplant |
@@ -88,7 +88,7 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Übergänge: Kreuzblende, Abblende Schwarz/Weiß, Wischblenden, Schieben, Kreis …
 - Eigenes Titelwerkzeug: Texte, Bauchbinden, Abspann; animiert (Einblenden, Schieben, Tippen)
 
-## Sprint 10 – Mehrspur, Multicam & Mischmodi
+## Sprint 10 – Mehrspur, Multicam & Mischmodi ✅
 - Mehrere Videospuren mit Bild-in-Bild, Deckkraft, Zuschneiden, Drehen
 - Multicam: R6 Mark II und 70D synchron (per Ton) als Mehrkamera-Clip, Kamerawechsel live
 - Mischmodi (Multiplizieren, Negativ multiplizieren, Überlagern …)

@@ -706,6 +706,47 @@ public sealed class TimelineEditor
         return result;
     }
 
+    /// <summary>
+    /// Multicam: Kamerawechsel am Bild <paramref name="frame"/> – der Multicam-Clip wird dort geteilt
+    /// und ab dort zeigt er Kamera <paramref name="angle"/> (am Clipanfang wird nur umgeschaltet).
+    /// </summary>
+    public bool SwitchAngle(long frame, int angle, Guid? trackId = null)
+    {
+        return Modify("Kamerawechsel", p =>
+        {
+            var tracks = trackId is { } id ? p.Tracks.Where(t => t.Id == id) : p.VideoTracks;
+            foreach (var track in tracks)
+            {
+                var clip = track.Clips.FirstOrDefault(c => c.IsMulticam && c.Contains(frame));
+                if (clip is null || angle < 0 || angle >= clip.MulticamAngles!.Count)
+                {
+                    continue;
+                }
+
+                if (clip.ActiveAngle == angle)
+                {
+                    return false;
+                }
+
+                if (frame > clip.StartFrame)
+                {
+                    var right = SplitClip(clip, frame, p.Settings.FrameRate);
+                    right.ActiveAngle = angle;
+                    right.TransitionIn = null;
+                    track.Clips.Add(right);
+                }
+                else
+                {
+                    clip.ActiveAngle = angle;
+                }
+
+                return true;
+            }
+
+            return false;
+        });
+    }
+
     /// <summary>Löst einen verschachtelten Clip wieder in seine Einzelclips auf.</summary>
     public bool Unnest(Guid clipId) =>
         Modify("Verschachtelung auflösen", p =>

@@ -418,44 +418,22 @@ public partial class ProgramMonitor : UserControl
         _stillCts = new CancellationTokenSource();
         var token = _stillCts.Token;
         var project = _vm.Project;
-        var source = PlaybackPlanner.VideoAt(project, _vm.PlayheadFrame);
-        if (source is null)
+        if (!project.AllClips.Any())
         {
             Still.Source = null;
-            Message.Text = project.AllClips.Any() ? string.Empty : "Die Timeline ist leer.";
-            var screenHeight = (int)Math.Clamp(Screen.ActualHeight * VisualTreeHelper.GetDpi(this).DpiScaleY, 180, 1080) / 2 * 2;
-            if (PlaybackPlanner.TitleOnlyFilter(project, _vm.PlayheadFrame, screenHeight) is { } titleFilter)
-            {
-                // Nur Titel (über Schwarz)
-                var titleWidth = Math.Max(2, (int)Math.Round(project.Settings.Width * (double)screenHeight / project.Settings.Height / 2) * 2);
-                try
-                {
-                    var titleImage = await _vm.Thumbnails.RenderOnBlackAsync(titleWidth, screenHeight, titleFilter, token);
-                    if (!token.IsCancellationRequested)
-                    {
-                        Still.Source = titleImage;
-                        Still.Visibility = Visibility.Visible;
-                        Video.Visibility = Visibility.Hidden;
-                        StillsRendered++;
-                        return titleImage is not null;
-                    }
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    Message.Text = "Vorschau nicht möglich: " + ex.Message;
-                }
-            }
-
+            Message.Text = "Die Timeline ist leer.";
             return false;
         }
 
         _stillBusy = true;
         try
         {
+            // Exaktes Bild über dieselbe Kette wie der Export: alle Spuren, Bild-in-Bild, Mischmodi, Titel, Farbe.
             var dpi = VisualTreeHelper.GetDpi(this).DpiScaleY;
             var height = (int)Math.Clamp(Screen.ActualHeight * dpi, 180, 1080) / 2 * 2;
-            var image = await _vm.Thumbnails.RenderAsync(source.OriginalPath, source.OriginalSeconds, height,
-                PlaybackPlanner.PreviewFilter(project, source, _vm.PlayheadFrame, height), token);
+            var job = MovieWorker.Core.Export.ExportBuilder.BuildStill(project, _vm.PlayheadFrame, height);
+            var png = await _vm.Tools.Require().RunForBytesAsync(job.Arguments, token);
+            var image = Services.ThumbnailService.Decode(png);
             if (token.IsCancellationRequested || (IsPlaying && !_stillMode))
             {
                 return false;

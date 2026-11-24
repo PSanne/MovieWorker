@@ -23,6 +23,7 @@ public static class TransformFilters
             return filters;
         }
 
+        filters.AddRange(CropAndFlip(clip.Transform, width, height, padBack: true));
         string N(double v) => v.ToString("0.######", CultureInfo.InvariantCulture);
         string Expr(AnimatedProperty property, string variable, Func<long, double> toUnit) =>
             clip.KeyframesFor(property) is { } track ? track.ToExpression(variable, toUnit) : N(clip.Transform.Get(property));
@@ -81,6 +82,7 @@ public static class TransformFilters
             return filters;
         }
 
+        filters.AddRange(CropAndFlip(clip.Transform, width, height, padBack: true));
         string N(double v) => v.ToString("0.######", CultureInfo.InvariantCulture);
         var scale = clip.ValueAt(AnimatedProperty.Scale, frameInClip) / 100;
         var px = clip.ValueAt(AnimatedProperty.PositionX, frameInClip) / 100;
@@ -112,6 +114,39 @@ public static class TransformFilters
         if (opacity < 0.99999)
         {
             filters.Add($"eq=contrast={N(opacity)}:brightness={N(0.5 * opacity - 0.5)}:saturation={N(opacity)}");
+        }
+
+        return filters;
+    }
+
+    /// <summary>Zuschneiden (in % je Seite) und Spiegeln. Mit <paramref name="padBack"/> bleibt die Bildgröße (Rand schwarz).</summary>
+    public static IReadOnlyList<string> CropAndFlip(ClipTransform t, int width, int height, bool padBack)
+    {
+        var filters = new List<string>();
+        if (t.HasCrop)
+        {
+            string N(double v) => v.ToString("0.######", CultureInfo.InvariantCulture);
+            var left = Math.Clamp(t.CropLeft, 0, 90) / 100;
+            var right = Math.Clamp(t.CropRight, 0, 90) / 100;
+            var top = Math.Clamp(t.CropTop, 0, 90) / 100;
+            var bottom = Math.Clamp(t.CropBottom, 0, 90) / 100;
+            var w = Even(width * Math.Max(0.05, 1 - left - right));
+            var h = Even(height * Math.Max(0.05, 1 - top - bottom));
+            filters.Add($"crop={w}:{h}:{N(width * left)}:{N(height * top)}");
+            if (padBack)
+            {
+                filters.Add($"pad={width}:{height}:{N(width * left)}:{N(height * top)}:black");
+            }
+        }
+
+        if (t.FlipHorizontal)
+        {
+            filters.Add("hflip");
+        }
+
+        if (t.FlipVertical)
+        {
+            filters.Add("vflip");
         }
 
         return filters;

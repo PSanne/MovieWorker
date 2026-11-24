@@ -60,6 +60,9 @@
                 <MenuItem Header="_Einrasten" InputGestureText="N" IsCheckable="True" IsChecked="{Binding Snapping}" />
                 <MenuItem Header="Videospur hinzufügen" Command="{Binding AddVideoTrackCommand}" />
                 <Separator />
+                <MenuItem Header="_Multicam-Clip aus markierten Aufnahmen" Command="{Binding CreateMulticamCommand}" />
+                <MenuItem Header="Kamera wechseln" InputGestureText="1 … 9" IsEnabled="False" />
+                <Separator />
                 <MenuItem Header="_Verschachteln (In/Out oder Clip) …" Command="{Binding NestCommand}" />
                 <MenuItem Header="Verschachtelung _auflösen" Command="{Binding UnnestCommand}" />
                 <Separator />
@@ -172,6 +175,8 @@
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="6">
                     <Button Content="In Timeline einfügen" Padding="8,2" Command="{Binding AddSelectedToTimelineCommand}" />
+                    <Button Content="Multicam" Padding="8,2" Margin="6,0,0,0" Command="{Binding CreateMulticamCommand}"
+                            ToolTip="Markierte Kameraaufnahmen (Strg+Klick) per Ton synchronisieren und als Multicam-Clip anhängen" />
                     <Button Content="Proxy" Padding="8,2" Margin="6,0,0,0" ToolTip="Proxy für flüssige Vorschau erstellen"
                             Command="{Binding CreateProxyForSelectedCommand}" />
                     <Button Content="Entfernen" Padding="8,2" Margin="6,0,0,0" Command="{Binding RemoveSelectedMediaCommand}" />
@@ -179,7 +184,8 @@
                 <Grid>
                     <ListBox x:Name="MediaList" ItemsSource="{Binding MediaView}" SelectedItem="{Binding SelectedMedia}"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" MouseDoubleClick="OnMediaDoubleClick"
-                             PreviewMouseLeftButtonDown="OnMediaMouseDown" PreviewMouseMove="OnMediaMouseMove">
+                             PreviewMouseLeftButtonDown="OnMediaMouseDown" PreviewMouseMove="OnMediaMouseMove"
+                             SelectionMode="Extended" SelectionChanged="OnMediaSelectionChanged">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:MediaItemViewModel}">
                                 <Grid Margin="2,4">
@@ -319,6 +325,59 @@
                                         <ComboBox Grid.Row="9" Grid.Column="1" Margin="0,2" ItemsSource="{Binding Source={x:Static vm:TitleViewModel.Animations}}" SelectedItem="{Binding AnimationOut}" />
                                         <TextBlock Grid.Row="10" Text="Dauer (s)" VerticalAlignment="Center" />
                                         <TextBox Grid.Row="10" Grid.Column="1" Margin="0,2" Text="{Binding AnimationSeconds, UpdateSourceTrigger=LostFocus}" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding IsMulticam, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Multicam" Style="{StaticResource SectionHeader}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition /><RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Bild von" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Column="1" Margin="0,2" ItemsSource="{Binding Angles}" SelectedItem="{Binding ActiveAngle}" />
+                                        <TextBlock Grid.Row="1" Text="Ton von" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,2" ItemsSource="{Binding Angles}" SelectedItem="{Binding AudioAngle}" />
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource Hint}" Text="Kamerawechsel am Abspielkopf mit den Tasten 1, 2, 3 … – auch während der Wiedergabe (Live-Schnitt)." />
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding IsVideoMediaClip, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Bild-in-Bild &amp; Zuschnitt" Style="{StaticResource SectionHeader}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4" Visibility="{Binding IsOverlayClip, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="Ecke:" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                        <Button Content="↖" Width="24" Command="{Binding PipPresetCommand}" CommandParameter="TL" />
+                                        <Button Content="↗" Width="24" Command="{Binding PipPresetCommand}" CommandParameter="TR" />
+                                        <Button Content="↙" Width="24" Command="{Binding PipPresetCommand}" CommandParameter="BL" />
+                                        <Button Content="↘" Width="24" Command="{Binding PipPresetCommand}" CommandParameter="BR" />
+                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Mischmodus" VerticalAlignment="Center" Visibility="{Binding IsOverlayClip, Converter={StaticResource BoolToVisibility}}" />
+                                        <ComboBox Grid.Column="1" Margin="0,2" ItemsSource="{Binding Source={x:Static vm:ClipViewModel.BlendModes}}" SelectedItem="{Binding Blend}"
+                                                  Visibility="{Binding IsOverlayClip, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Grid.Row="1" Text="Links" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="1" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="45" Value="{Binding CropLeft}" />
+                                        <TextBlock Grid.Row="2" Text="Rechts" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="2" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="45" Value="{Binding CropRight}" />
+                                        <TextBlock Grid.Row="3" Text="Oben" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="3" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="45" Value="{Binding CropTop}" />
+                                        <TextBlock Grid.Row="4" Text="Unten" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="4" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="45" Value="{Binding CropBottom}" />
+                                        <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+                                            <CheckBox Content="waagerecht spiegeln" IsChecked="{Binding FlipHorizontal}" Margin="0,0,8,0" />
+                                            <CheckBox Content="senkrecht" IsChecked="{Binding FlipVertical}" />
+                                        </StackPanel>
                                     </Grid>
                                 </StackPanel>
 

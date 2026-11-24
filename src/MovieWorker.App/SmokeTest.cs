@@ -438,6 +438,44 @@ public static class SmokeTest
         SaveScreenshot(window, Path.Combine(c.OutputFolder, "titel.png"));
         clipCount = vm.Project.AllClips.Count();
 
+        // ---- Mehrspur, Multicam & Mischmodi (Sprint 10)
+        var camA = imported.First(m => m.Name.StartsWith("MVI_0001", StringComparison.OrdinalIgnoreCase));
+        var camB = imported.First(m => m.Name.StartsWith("MVI_0002", StringComparison.OrdinalIgnoreCase));
+        vm.SelectedMediaItems = [camA, camB];
+        var mc = await vm.CreateMulticamAsync();
+        c.Check(mc is not null && vm.Project.FindClip(mc.Id)?.Clip.IsMulticam == true, "Multicam-Clip aus zwei Kameras");
+        vm.PlayheadFrame = mc!.StartFrame + 25;
+        c.Check(vm.SwitchAngle(1), "Kamerawechsel auf Kamera 2");
+        vm.PlayheadFrame = mc.StartFrame + 60;
+        program.Play(1);
+        await Settle(250);
+        var liveSwitch = vm.SwitchAngle(0);
+        await Settle(250);
+        program.Pause();
+        c.Check(liveSwitch && vm.Project.VideoTracks.First().Clips.Count(cl => cl.IsMulticam) >= 3, "Live-Kamerawechsel beim Abspielen");
+        vm.PlayheadFrame = mc.StartFrame + 30;
+        c.Check(await program.RenderStillNowAsync(), "Vorschau zeigt Kamera 2 " + program.MessageText);
+
+        var pipClip = vm.Project.VideoTracks.Skip(1).SelectMany(t => t.Clips).First(cl => cl.SourcePaths.Count > 0);
+        vm.SelectedClipId = pipClip.Id;
+        c.Check(vm.SelectedClip!.IsOverlayClip, "Clip auf oberer Videospur erkannt");
+        vm.SelectedClip.PipPresetCommand.Execute("TR");
+        vm.SelectedClip.CropLeft = 10;
+        vm.SelectedClip.FlipHorizontal = true;
+        var pipLive = vm.Project.FindClip(pipClip.Id)!.Value.Clip;
+        c.Check(Math.Abs(pipLive.Transform.Scale - 30) < 0.01 && pipLive.Transform.FlipHorizontal, "Bild-in-Bild oben rechts, gespiegelt");
+        vm.PlayheadFrame = pipLive.StartFrame + 5;
+        c.Check(await program.RenderStillNowAsync(), "Exakte Vorschau mit Bild-in-Bild " + program.MessageText);
+        vm.SelectedClip.Blend = ClipViewModel.BlendModes.First(b => b.Value == Core.Timeline.BlendMode.Screen);
+        c.Check(await program.RenderStillNowAsync(), "Vorschau mit Mischmodus " + program.MessageText);
+        vm.Editor.SetMarks(pipLive.StartFrame, pipLive.StartFrame + 40);
+        var compJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("web-h264-1080")!, Path.Combine(exportFolder, "mehrspur.mp4"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(compJob.State == ExportJobState.Done, "Export mit Bild-in-Bild und Mischmodus: " + compJob.Detail);
+        c.Check(await vm.ExportStillToAsync(Path.Combine(exportFolder, "komposit.png")), "Einzelbild aus der Export-Kette");
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "mehrspur.png"));
+        clipCount = vm.Project.AllClips.Count();
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");

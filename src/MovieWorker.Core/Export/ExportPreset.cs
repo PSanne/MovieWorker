@@ -102,6 +102,12 @@ public sealed record ExportPreset(
 
     public static ExportPreset Default => All[0];
 
+    /// <summary>Interne Vorlage: ein einzelnes PNG-Bild über die Export-Kette (für exakte Vorschau-Standbilder).</summary>
+    public static ExportPreset StillImage(int height) => new(
+        "still", "Standbild", "Vorschau", PresetCategory.Web, ".png", "yuv420p", [], [], MaxHeight: Math.Max(2, height / 2 * 2));
+
+    public bool IsStillImage => Id == "still";
+
     public static ExportPreset? Find(string? id) => All.FirstOrDefault(p => p.Id == id);
 
     /// <summary>Kopie mit anderer Bildanpassung (z. B. Hochformat zuschneiden statt unscharfem Rand).</summary>

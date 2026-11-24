@@ -84,6 +84,107 @@ public sealed partial class ClipViewModel : ObservableObject
 
     public bool HasTransition => Clip.TransitionIn is not null;
 
+    // ------------------------------------------------------------ Mehrspur (Sprint 10)
+
+    /// <summary>Clip liegt auf einer oberen Videospur (V2 …): Bild-in-Bild, Mischmodus.</summary>
+    public bool IsOverlayClip => Track is { Kind: TrackKind.Video } t && _editor.Project.VideoTracks.First().Id != t.Id;
+
+    public static IReadOnlyList<LabeledValue<BlendMode>> BlendModes { get; } =
+        Enum.GetValues<BlendMode>().Select(m => new LabeledValue<BlendMode>(m, BlendModeInfo.Label(m))).ToList();
+
+    public LabeledValue<BlendMode> Blend
+    {
+        get => BlendModes.First(b => b.Value == Clip.Transform.Blend);
+        set => _editor.UpdateClip(ClipId, "Mischmodus", c => c.Transform.Blend = value.Value);
+    }
+
+    public double CropLeft
+    {
+        get => Clip.Transform.CropLeft;
+        set => _editor.UpdateClip(ClipId, "Zuschneiden", c => c.Transform.CropLeft = Math.Clamp(value, 0, 45), mergeSimilar: true);
+    }
+
+    public double CropRight
+    {
+        get => Clip.Transform.CropRight;
+        set => _editor.UpdateClip(ClipId, "Zuschneiden", c => c.Transform.CropRight = Math.Clamp(value, 0, 45), mergeSimilar: true);
+    }
+
+    public double CropTop
+    {
+        get => Clip.Transform.CropTop;
+        set => _editor.UpdateClip(ClipId, "Zuschneiden", c => c.Transform.CropTop = Math.Clamp(value, 0, 45), mergeSimilar: true);
+    }
+
+    public double CropBottom
+    {
+        get => Clip.Transform.CropBottom;
+        set => _editor.UpdateClip(ClipId, "Zuschneiden", c => c.Transform.CropBottom = Math.Clamp(value, 0, 45), mergeSimilar: true);
+    }
+
+    public bool FlipHorizontal
+    {
+        get => Clip.Transform.FlipHorizontal;
+        set => _editor.UpdateClip(ClipId, "Spiegeln", c => c.Transform.FlipHorizontal = value);
+    }
+
+    public bool FlipVertical
+    {
+        get => Clip.Transform.FlipVertical;
+        set => _editor.UpdateClip(ClipId, "Spiegeln", c => c.Transform.FlipVertical = value);
+    }
+
+    /// <summary>Schnellvorlagen für Bild-in-Bild.</summary>
+    [RelayCommand]
+    private void PipPreset(string? corner)
+    {
+        var (x, y) = corner switch
+        {
+            "TL" => (-32.0, -32.0),
+            "TR" => (32.0, -32.0),
+            "BL" => (-32.0, 32.0),
+            _ => (32.0, 32.0),
+        };
+        _editor.UpdateClip(ClipId, "Bild-in-Bild", c =>
+        {
+            c.Keyframes.RemoveAll(k => k.Property is AnimatedProperty.Scale or AnimatedProperty.PositionX or AnimatedProperty.PositionY);
+            c.Transform.Scale = 30;
+            c.Transform.PositionX = x;
+            c.Transform.PositionY = y;
+        });
+    }
+
+    // ------------------------------------------------------------ Multicam
+
+    public bool IsMulticam => Clip.IsMulticam;
+
+    public IReadOnlyList<LabeledValue<int>> Angles =>
+        Clip.MulticamAngles?.Select((a, i) => new LabeledValue<int>(i, $"{i + 1}: {a.Name}")).ToList() ?? [];
+
+    public LabeledValue<int>? ActiveAngle
+    {
+        get => Angles.FirstOrDefault(a => a.Value == Clip.ActiveAngle);
+        set
+        {
+            if (value is not null)
+            {
+                _editor.UpdateClip(ClipId, "Kamera", c => c.ActiveAngle = value.Value);
+            }
+        }
+    }
+
+    public LabeledValue<int>? AudioAngle
+    {
+        get => Angles.FirstOrDefault(a => a.Value == Clip.AudioAngle);
+        set
+        {
+            if (value is not null)
+            {
+                _editor.UpdateClip(ClipId, "Ton-Kamera", c => c.AudioAngle = value.Value);
+            }
+        }
+    }
+
     /// <summary>Bewegung: Zoom, Position, Drehung, Deckkraft – je mit Keyframes.</summary>
     public IReadOnlyList<AnimatedValueViewModel> Motion { get; }
 

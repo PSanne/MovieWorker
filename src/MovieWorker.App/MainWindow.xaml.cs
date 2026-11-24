@@ -121,6 +121,12 @@ public partial class MainWindow : Window
             case Key.Space:
                 if (sourceFocused) SourceMonitor.TogglePlay(); else ProgramMonitor.TogglePlay();
                 break;
+            case >= Key.D1 and <= Key.D9 when !ctrl && !shift:
+                _viewModel.SwitchAngle(e.Key - Key.D1);
+                break;
+            case >= Key.NumPad1 and <= Key.NumPad9 when !ctrl:
+                _viewModel.SwitchAngle(e.Key - Key.NumPad1);
+                break;
             case Key.F9:
                 SourceMonitor.Edit(EditMode.Insert);
                 break;
@@ -214,7 +220,8 @@ public partial class MainWindow : Window
         if (handled)
         {
             e.Handled = true;
-            if (e.Key is not (Key.Space or Key.J or Key.K or Key.L) && ProgramMonitor.IsPlaying)
+            if (e.Key is not (Key.Space or Key.J or Key.K or Key.L or (>= Key.D1 and <= Key.D9) or (>= Key.NumPad1 and <= Key.NumPad9))
+                && ProgramMonitor.IsPlaying)
             {
                 ProgramMonitor.Pause();
             }
@@ -270,6 +277,12 @@ public partial class MainWindow : Window
 
     private ImageSource? ThumbnailFor(TimelineClip clip)
     {
+        if (clip.IsMulticam)
+        {
+            var angle = clip.MulticamAngles![Math.Clamp(clip.ActiveAngle, 0, clip.MulticamAngles.Count - 1)];
+            clip = new TimelineClip { MediaId = angle.MediaId, SourcePaths = angle.SourcePaths, SourceIn = clip.SourceIn + angle.OffsetSeconds };
+        }
+
         var media = _viewModel.Project.FindMedia(clip.MediaId);
         var path = media?.PreviewPath ?? clip.PrimaryPath;
         if (string.IsNullOrEmpty(path))
@@ -303,6 +316,9 @@ public partial class MainWindow : Window
     }
 
     private void OnMediaMouseDown(object sender, MouseButtonEventArgs e) => _mediaDragStart = e.GetPosition(null);
+
+    private void OnMediaSelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        _viewModel.SelectedMediaItems = MediaList.SelectedItems.OfType<MediaItemViewModel>().ToList();
 
     private void OnMediaMouseMove(object sender, MouseEventArgs e)
     {

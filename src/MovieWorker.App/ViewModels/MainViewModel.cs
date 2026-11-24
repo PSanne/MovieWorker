@@ -329,6 +329,89 @@ public sealed partial class MainViewModel : ObservableObject
         StatusText = "Kreuzblende (1 s) eingefügt – Art und Länge im Inspektor ändern.";
     }
 
+    /// <summary>Im Medienpool markierte Aufnahmen (Mehrfachauswahl mit Strg/Umschalt).</summary>
+    public IReadOnlyList<MediaItemViewModel> SelectedMediaItems { get; set; } = [];
+
+    /// <summary>
+    /// Multicam-Clip aus den markierten Kameraaufnahmen: Versatz per Ton-Synchronisation zur ersten Aufnahme,
+    /// angehängt an V1. Kamerawechsel danach mit den Tasten 1–4 (auch während der Wiedergabe).
+    /// </summary>
+    [RelayCommand]
+    public async Task<TimelineClip?> CreateMulticamAsync()
+    {
+        var cameras = SelectedMediaItems.Where(m => !m.IsAudioOnly).Take(9).ToList();
+        if (cameras.Count < 2)
+        {
+            _dialogs.Error("Für einen Multicam-Clip bitte mindestens zwei Kameraaufnahmen im Medienpool markieren (Strg+Klick).");
+            return null;
+        }
+
+        IsSyncing = true;
+        StatusText = "Kameras werden per Ton synchronisiert …";
+        var offsets = new List<double> { 0 };
+        var unsure = new List<string>();
+        try
+        {
+            foreach (var camera in cameras.Skip(1))
+            {
+                var offset = 0.0;
+                if (cameras[0].Model.First.HasAudio && camera.Model.First.HasAudio)
+                {
+                    var result = await AudioSync.SyncAsync(cameras[0].Model, camera.Model);
+                    if (result.IsReliable)
+                    {
+                        offset = result.OffsetSeconds;
+                    }
+                    else
+                    {
+                        unsure.Add(camera.Name);
+                    }
+                }
+                else
+                {
+                    unsure.Add(camera.Name);
+                }
+
+                offsets.Add(offset);
+            }
+        }
+        catch (Exception ex) when (ex is Core.Media.FfmpegException or IOException or InvalidOperationException)
+        {
+            StatusText = "Synchronisation fehlgeschlagen: " + ex.Message;
+            return null;
+        }
+        finally
+        {
+            IsSyncing = false;
+        }
+
+        AdoptSettingsIfFirstClip(cameras[0].Model);
+        var clip = MulticamResolver.Create(cameras.Select(c => c.Model).ToList(), offsets, Project.Settings.FrameRate,
+            $"Multicam ({cameras.Count} Kameras)");
+        if (!Editor.Place(EditMode.Append, Project.VideoTracks.First().Id, clip, 0))
+        {
+            return null;
+        }
+
+        SelectedClipId = clip.Id;
+        StatusText = unsure.Count == 0
+            ? "Multicam-Clip erstellt – mit 1, 2, 3 … die Kamera am Abspielkopf wechseln (auch beim Abspielen)."
+            : $"Multicam-Clip erstellt. Ohne eindeutigen Ton gleich ausgerichtet: {string.Join(", ", unsure)}.";
+        return clip;
+    }
+
+    /// <summary>Taste 1–9: Kamerawechsel am Abspielkopf (Multicam-Clip auf einer Videospur).</summary>
+    public bool SwitchAngle(int angle)
+    {
+        var ok = Editor.SwitchAngle(PlayheadFrame, angle);
+        if (ok)
+        {
+            StatusText = $"Kamera {angle + 1} ab {PlayheadText}.";
+        }
+
+        return ok;
+    }
+
     [RelayCommand]
     public void Nest()
     {
@@ -1163,9 +1246,8 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
-            await _tools.Require().RunAsync(
-                Core.Export.FfmpegArgs.StillFrame(source.OriginalPath, source.OriginalSeconds,
-                    Core.Preview.PlaybackPlanner.PreviewFilter(Project, source, PlayheadFrame, Project.Settings.Height), path), 0);
+            var png = await _tools.Require().RunForBytesAsync(Core.Export.ExportBuilder.BuildStill(Project, PlayheadFrame, Project.Settings.Height).Arguments);
+            await File.WriteAllBytesAsync(path, png);
             StatusText = $"Einzelbild gespeichert: {Path.GetFileName(path)}";
             return true;
         }
