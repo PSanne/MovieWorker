@@ -27,7 +27,10 @@ public static class ExportBuilder
     /// <param name="outputPath">Zieldatei.</param>
     /// <param name="rangeStart">Optional: erstes Bild des Bereichs (In-Marke).</param>
     /// <param name="rangeEnd">Optional: Ende des Bereichs (Out-Marke, exklusiv).</param>
-    public static FfmpegJob Build(MovieProject project, ExportPreset preset, string outputPath, long? rangeStart = null, long? rangeEnd = null)
+    /// <param name="loudness">Messwerte einer vorherigen Lautheitsmessung (für genaue Normalisierung in zwei Durchgängen).</param>
+    /// <param name="measureLoudness">Nur die Lautheit messen (Ausgabe ins Nichts, Messwerte auf stderr).</param>
+    public static FfmpegJob Build(MovieProject project, ExportPreset preset, string outputPath, long? rangeStart = null, long? rangeEnd = null,
+        Audio.LoudnessMeasurement? loudness = null, bool measureLoudness = false)
     {
         long totalFrames;
         if (rangeStart is { } rs && rangeEnd is { } re)
@@ -143,12 +146,12 @@ public static class ExportBuilder
             graph.Append(CultureInfo.InvariantCulture, $"{videoIn}{string.Join(',', vf)}[v{segment}];");
 
             // Kameraton
-            var useAudio = clip.HasAudio && !clip.AudioMuted && !videoTrack.Muted && Math.Abs(clip.Speed - 1) < 1e-9;
+            var useAudio = clip.HasAudio && !clip.AudioMuted && project.IsAudible(videoTrack) && Math.Abs(clip.Speed - 1) < 1e-9;
             if (useAudio)
             {
                 var audioIn = ConcatParts(graph, parts, "a", $"ca{segment}");
                 var af = new List<string> { "asetpts=PTS-STARTPTS", AudioFormat };
-                af.AddRange(VolumeAndFades(clip, rate, videoTrack.VolumeDb));
+                af.AddRange(VolumeAndFades(clip, rate, 0));
                 af.Add($"apad=whole_dur={durationText}");
                 af.Add($"atrim=duration={durationText}");
                 graph.Append(CultureInfo.InvariantCulture, $"{audioIn}{string.Join(',', af)}[a{segment}];");
@@ -200,14 +203,38 @@ public static class ExportBuilder
         var outputRate = OutputFrameRate(rate, preset);
         graph.Append(CultureInfo.InvariantCulture, $"[vcat]{OutputStage(width, height, preset, rate, outputRate)}[vout];");
 
-        // ---------- Tonspuren ----------
-        var mixLabels = new List<string> { "[acam]" };
-        var audioClip = 0;
-        foreach (var track in project.AudioTracks.Where(t => !t.Muted))
+        // ---------- Mischpult: je Spur ein Kanalzug, dann Summe ----------
+        var total = FfmpegArgs.Seconds(rate.FramesToSeconds(totalFrames));
+        var buses = new List<(TimelineTrack Track, string Label)>();
+        var busIndex = 0;
+
+        string ChannelStrip(TimelineTrack track, string input)
         {
-            foreach (var clip in track.OrderedClips.Where(c => c.HasAudio && !c.AudioMuted))
+            var chain = new List<string>(track.Audio.Filters());
+            if (Math.Abs(track.VolumeDb) > 1e-6)
             {
-                var parts = AddClipInputs(clip, rate, inputs, ref inputIndex);
+                chain.Add($"volume={Number(track.VolumeDb)}dB");
+            }
+
+            var label = $"[bus{busIndex++}]";
+            graph.Append(CultureInfo.InvariantCulture, $"{input}{(chain.Count == 0 ? "anull" : string.Join(',', chain))}{label};");
+            return label;
+        }
+
+        buses.Add((videoTrack, ChannelStrip(videoTrack, "[acam]")));
+
+        var audioClip = 0;
+        var trackClips = project.AudioTracks.Where(project.IsAudible)
+            .Select(t => (Track: t, Clips: t.OrderedClips.Where(c => c.HasAudio && !c.AudioMuted && c.SourcePaths.Count > 0)
+                .Select(c => (Clip: c, Parts: AddClipInputs(c, rate, inputs, ref inputIndex))).ToList()))
+            .Concat(overlayAudio.Where(o => project.IsAudible(o.Track)).GroupBy(o => o.Track)
+                .Select(g => (Track: g.Key, Clips: g.Select(o => (o.Clip, o.Parts)).ToList())))
+            .ToList();
+        foreach (var (track, clips) in trackClips.Where(t => t.Clips.Count > 0))
+        {
+            var labels = new List<string>();
+            foreach (var (clip, parts) in clips)
+            {
                 var audioIn = ConcatParts(graph, parts, "a", $"ta{audioClip}");
                 var duration = FfmpegArgs.Seconds(rate.FramesToSeconds(clip.LengthFrames));
                 var delayMs = (long)Math.Round(rate.FramesToSeconds(clip.StartFrame) * 1000);
@@ -218,35 +245,79 @@ public static class ExportBuilder
                 }
 
                 af.Add($"atrim=duration={duration}");
-                af.AddRange(VolumeAndFades(clip, rate, track.VolumeDb));
+                af.AddRange(VolumeAndFades(clip, rate, 0));
                 af.Add($"adelay=delays={delayMs}:all=1");
                 graph.Append(CultureInfo.InvariantCulture, $"{audioIn}{string.Join(',', af)}[t{audioClip}];");
-                mixLabels.Add($"[t{audioClip}]");
+                labels.Add($"[t{audioClip}]");
                 audioClip++;
+            }
+
+            var raw = $"[raw{busIndex}]";
+            graph.Append(labels.Count == 1
+                ? $"{labels[0]}apad=whole_dur={total},atrim=duration={total}{raw};"
+                : string.Create(CultureInfo.InvariantCulture, $"{string.Concat(labels)}amix=inputs={labels.Count}:duration=longest:normalize=0,apad=whole_dur={total},atrim=duration={total}{raw};"));
+            buses.Add((track, ChannelStrip(track, raw)));
+        }
+
+        // Auto-Ducking: Spur wird leiser, solange auf der Quellspur Ton ist (Sidechain-Kompressor).
+        var ducked = buses.Where(b => b.Track.Audio.DuckBy is { } source && buses.Any(o => o.Track.Id == source && o.Track.Id != b.Track.Id)).ToList();
+        foreach (var source in ducked.Select(d => d.Track.Audio.DuckBy!.Value).Distinct())
+        {
+            var index = buses.FindIndex(b => b.Track.Id == source);
+            var targets = ducked.Where(d => d.Track.Audio.DuckBy == source).ToList();
+            var main = $"[dm{index}]";
+            var sidechains = targets.Select((_, i) => $"[sc{index}_{i}]").ToList();
+            graph.Append(CultureInfo.InvariantCulture, $"{buses[index].Label}asplit={targets.Count + 1}{main}{string.Concat(sidechains)};");
+            buses[index] = (buses[index].Track, main);
+            for (var i = 0; i < targets.Count; i++)
+            {
+                var targetIndex = buses.FindIndex(b => b.Track.Id == targets[i].Track.Id);
+                var ratio = Math.Clamp(targets[i].Track.Audio.DuckAmountDb / 2, 2, 20);
+                var output = $"[dk{targetIndex}]";
+                graph.Append(CultureInfo.InvariantCulture,
+                    $"{buses[targetIndex].Label}{sidechains[i]}sidechaincompress=threshold=0.03:ratio={Number(ratio)}:attack=20:release=500:makeup=1{output};");
+                buses[targetIndex] = (buses[targetIndex].Track, output);
             }
         }
 
-        foreach (var (clip, track, parts) in overlayAudio)
+        // Summe (Master): Lautstärke, Lautheit, Limiter
+        var master = new List<string>();
+        var stillOnly = preset.IsStillImage;
+        if (Math.Abs(project.Master.VolumeDb) > 1e-6 && !stillOnly)
         {
-            var audioIn = ConcatParts(graph, parts, "a", $"oa{audioClip}");
-            var duration = FfmpegArgs.Seconds(rate.FramesToSeconds(clip.LengthFrames));
-            var delayMs = (long)Math.Round(rate.FramesToSeconds(clip.StartFrame) * 1000);
-            var af = new List<string> { "asetpts=PTS-STARTPTS", AudioFormat, $"atrim=duration={duration}" };
-            af.AddRange(VolumeAndFades(clip, rate, track.VolumeDb));
-            af.Add($"adelay=delays={delayMs}:all=1");
-            graph.Append(CultureInfo.InvariantCulture, $"{audioIn}{string.Join(',', af)}[t{audioClip}];");
-            mixLabels.Add($"[t{audioClip}]");
-            audioClip++;
+            master.Add($"volume={Number(project.Master.VolumeDb)}dB");
         }
 
-        if (mixLabels.Count == 1)
+        var target = project.Master.LoudnessTarget ?? -14;
+        if (measureLoudness)
         {
-            graph.Append("[acam]anull[aout]");
+            master.Add($"loudnorm=I={Number(target)}:TP=-1:LRA=11:print_format=json");
         }
-        else
+        else if (project.Master.LoudnessTarget is { } lufs && !stillOnly)
         {
-            graph.Append(CultureInfo.InvariantCulture,
-                $"{string.Concat(mixLabels)}amix=inputs={mixLabels.Count}:duration=first:normalize=0[aout]");
+            master.Add(loudness is { } m
+                ? $"loudnorm=I={Number(lufs)}:TP=-1:LRA=11:measured_I={Number(m.IntegratedLufs)}:measured_TP={Number(m.TruePeakDb)}:measured_LRA={Number(m.Range)}:measured_thresh={Number(m.Threshold)}:offset={Number(m.Offset)}:linear=true"
+                : $"loudnorm=I={Number(lufs)}:TP=-1:LRA=11");
+            master.Add("aresample=48000");
+        }
+
+        if (project.Master.Limiter && !measureLoudness && !stillOnly)
+        {
+            master.Add("alimiter=limit=0.944:level=disabled");
+        }
+
+        var mix = buses.Count == 1
+            ? $"{buses[0].Label}anull"
+            : $"{string.Concat(buses.Select(b => b.Label))}amix=inputs={buses.Count}:duration=first:normalize=0";
+        graph.Append(CultureInfo.InvariantCulture, $"{mix}{(master.Count == 0 ? string.Empty : "," + string.Join(',', master))}[aout]");
+
+        if (measureLoudness)
+        {
+            graph.Append(";[vout]nullsink");
+            var measureArgs = new List<string> { "-v", "info", "-nostdin", "-hide_banner" };
+            measureArgs.AddRange(inputs);
+            measureArgs.AddRange(["-filter_complex", graph.ToString(), "-map", "[aout]", "-f", "null", "-"]);
+            return new FfmpegJob(measureArgs, rate.FramesToSeconds(totalFrames), "-");
         }
 
         if (preset.AudioOnly)
@@ -289,6 +360,10 @@ public static class ExportBuilder
         args.AddRange(["-ar", "48000", "-progress", "pipe:1", "-nostats", outputPath]);
         return new FfmpegJob(args, rate.FramesToSeconds(totalFrames), outputPath);
     }
+
+    /// <summary>Misst die Lautheit der fertigen Mischung (ffmpeg gibt die Werte auf stderr aus).</summary>
+    public static FfmpegJob BuildLoudnessMeasurement(MovieProject project, long? rangeStart = null, long? rangeEnd = null) =>
+        Build(project, ExportPreset.Find("audio-wav")!, "-", rangeStart, rangeEnd, measureLoudness: true);
 
     /// <summary>Exaktes Vorschaubild eines Timeline-Bildes – über dieselbe Kette wie der Export.</summary>
     public static FfmpegJob BuildStill(MovieProject project, long frame, int height) =>

@@ -559,6 +559,54 @@ public static class SmokeTest
         SaveScreenshot(window, Path.Combine(c.OutputFolder, "farbe2.png"));
         clipCount = vm.Project.AllClips.Count();
 
+        // ---- Ton I (Sprint 13): Mischpult, Effekte, Ducking, Solo, Lautheit
+        window.AudioTab.IsSelected = true;
+        await Settle();
+        var mixer = vm.Mixer;
+        c.Check(mixer.Strips.Count == vm.Project.Tracks.Count(t => t.Kind != Core.Timeline.TrackKind.Title), $"Mischpult mit {mixer.Strips.Count} Kanalzügen");
+        var v1Track = vm.Project.VideoTracks.First();
+        var musicTrack = vm.Project.AudioTracks.FirstOrDefault(t => t.Clips.Count > 0) ?? vm.Project.AudioTracks.First();
+        var v1Strip = mixer.Strips.First(st => st.TrackId == v1Track.Id);
+        var musicStrip = mixer.Strips.First(st => st.TrackId == musicTrack.Id);
+        v1Strip.HighPassHz = 80;
+        v1Strip.NoiseReduction = 0.4;
+        v1Strip.Compressor = true;
+        musicStrip.VolumeDb = -4;
+        musicStrip.Pan = 0.2;
+        musicStrip.EqLow = 3;
+        musicStrip.DuckBy = musicStrip.DuckOptions.First(o => o.TrackId == v1Track.Id);
+        var mixedMusic = vm.Project.Tracks.First(t => t.Id == musicTrack.Id);
+        c.Check(mixedMusic.Audio.DuckBy == v1Track.Id && Math.Abs(mixedMusic.Audio.Pan - 0.2) < 1e-6 && Math.Abs(mixedMusic.VolumeDb + 4) < 1e-6
+                && vm.Project.VideoTracks.First().Audio.Compressor, "Kanalzüge: Fader, Panorama, EQ, Kompressor, Ducking – " + musicStrip.Summary);
+        musicStrip.Solo = true;
+        c.Check(!vm.Project.IsAudible(vm.Project.VideoTracks.First()) && musicStrip.Solo, "Solo schaltet die anderen Spuren stumm");
+        vm.UndoCommand.Execute(null);
+        c.Check(!mixer.Strips.First(st => st.TrackId == musicTrack.Id).Solo, "Solo rückgängig gemacht");
+
+        var meterClip = vm.Project.VideoTracks.First().Clips.First(cl => cl.HasAudio && cl.SourcePaths.Count > 0);
+        await vm.Waveforms.GetAsync(meterClip.SourcePaths);
+        vm.PlayheadFrame = meterClip.StartFrame + 10;
+        c.Check(mixer.Strips.First(st => st.TrackId == v1Track.Id).Level > 0, "Pegelanzeige zeigt Kameraton");
+
+        mixer.LoudnessTarget = mixer.LoudnessTargets.First(o => o.Target == -14);
+        c.Check(vm.Project.Master.LoudnessTarget == -14, "Lautheits-Ziel −14 LUFS gewählt");
+        await mixer.MeasureLoudnessCommand.ExecuteAsync(null);
+        c.Check(mixer.LastMeasurement is not null, "Lautheit der Mischung gemessen: " + mixer.LoudnessText.Replace('\n', ' '));
+        var loudStart = meterClip.StartFrame;
+        vm.Editor.SetMarks(loudStart, loudStart + vm.Project.Settings.FrameRate.SecondsToFrames(5));
+        var loudJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("audio-wav")!, Path.Combine(exportFolder, "ton.wav"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(loudJob.State == ExportJobState.Done && loudJob.Measured is not null, "Ton-Export mit Lautheits-Normalisierung: " + loudJob.Detail);
+        var verify = MovieWorker.Core.Audio.LoudnessMeasurement.Parse(await tools.Require().RunForStderrAsync(
+            ["-v", "info", "-nostdin", "-hide_banner", "-i", loudJob.OutputPath, "-af", "loudnorm=I=-14:TP=-1:LRA=11:print_format=json", "-f", "null", "-"]));
+        c.Check(verify is { IntegratedLufs: > -16.5 and < -11.5 }, $"Exportierter Ton misst {verify?.IntegratedLufs:0.0} LUFS (Ziel −14)");
+        var mixJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("web-h264-1080")!, Path.Combine(exportFolder, "mischpult.mp4"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(mixJob.State == ExportJobState.Done, "Video-Export mit Mischpult: " + mixJob.Detail);
+        vm.DuckSelectedTrackCommand.Execute(null);
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "ton.png"));
+        clipCount = vm.Project.AllClips.Count();
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");
@@ -570,6 +618,7 @@ public static class SmokeTest
         c.Check(vm.Bins.Count == 3 && vm.MediaItems.Any(m => m.Rating == 4 && m.KeywordsText.Contains("Drohne")) && vm.MediaItems.Any(m => m.HasSync),
             "Ordner, Bewertung, Schlagwörter und Synchronisation gespeichert");
         c.Check(settings.Settings.RecentProjects.Contains(projectFile), "Zuletzt geöffnet gemerkt");
+        c.Check(vm.Project.Master.LoudnessTarget == -14 && vm.Project.Tracks.Any(t => t.Audio.DuckBy is not null), "Mischpult-Einstellungen gespeichert");
 
         // ---- Karten-Import (kopieren + Prüfsumme)
         var plan = CardImporter.Plan(CardScanner.Scan(c.MediaFolder), Path.Combine(c.Temp, "Import"), DateTime.Today, "EOS 70D");

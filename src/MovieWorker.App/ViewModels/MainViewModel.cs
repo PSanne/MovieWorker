@@ -34,6 +34,7 @@ public sealed partial class MainViewModel : ObservableObject
         Editor = new TimelineEditor();
         Editor.Changed += OnEditorChanged;
         Waveforms = new WaveformService(tools);
+        Mixer = new MixerViewModel(Editor, tools, Waveforms);
         Proxies = new ProxyService(tools, settings);
         Proxies.ProxyFinished += (_, _) => Editor.NotifyMediaChanged();
         MediaItem.UseProxies = settings.Settings.UseProxies;
@@ -61,6 +62,9 @@ public sealed partial class MainViewModel : ObservableObject
     public ThumbnailService Thumbnails => _thumbnails;
 
     public WaveformService Waveforms { get; }
+
+    /// <summary>Mischpult (Reiter „Ton“).</summary>
+    public MixerViewModel Mixer { get; }
 
     public ProxyService Proxies { get; }
 
@@ -247,6 +251,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         SelectedClip?.RefreshMotion();
+        Mixer.UpdateMeters(value);
     }
 
     /// <summary>Wie Ziehen in der Timeline wirkt (Normal, Ripple, Roll, Slip, Slide).</summary>
@@ -1591,6 +1596,21 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Legt einen Export-Auftrag direkt an (ohne Dialog, z. B. für den Selbsttest).</summary>
+    /// <summary>Auto-Ducking: die Spur des gewählten Clips wird leiser, solange auf V1 (Kameraton) gesprochen wird.</summary>
+    [RelayCommand]
+    private void DuckSelectedTrack()
+    {
+        var v1 = Project.VideoTracks.First();
+        if (SelectedClipId is not { } id || Project.FindClip(id) is not ({ } track, _) || track.Id == v1.Id || track.Kind == TrackKind.Title)
+        {
+            StatusText = "Wähle einen Clip auf einer Ton- oder oberen Videospur (z. B. die Musik) – sie wird dann bei Sprache auf V1 leiser.";
+            return;
+        }
+
+        Editor.SetTrackAudio(track.Id, "Ducking", t => t.Audio.DuckBy = v1.Id);
+        StatusText = $"„{track.Name}“ wird jetzt automatisch leiser, sobald auf „{v1.Name}“ Ton ist.";
+    }
+
     public ExportJobViewModel EnqueueExport(Core.Export.ExportPreset preset, string outputPath, bool useRange)
     {
         var job = new ExportJobViewModel(Project.Clone(), preset, outputPath,
@@ -1768,6 +1788,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         SelectedClip?.Refresh();
+        Mixer.Sync();
         DeleteSelectedClipCommand.NotifyCanExecuteChanged();
         RippleDeleteSelectedClipCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(PlayheadText));

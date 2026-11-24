@@ -431,4 +431,6 @@ public partial class MainWindow : Window
 
     private void UpdateEmptyHint() =>
         EmptyPoolHint.Visibility = _viewModel.MediaItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    private void ShowMixer_Click(object sender, RoutedEventArgs e) => AudioTab.IsSelected = true;
 }

@@ -45,6 +45,9 @@ public sealed partial class ExportJobViewModel : ObservableObject
 
     public CancellationTokenSource Cancellation { get; } = new();
 
+    /// <summary>Gemessene Lautheit der Mischung (vor der Normalisierung).</summary>
+    public Core.Audio.LoudnessMeasurement? Measured { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateText), nameof(IsRunning), nameof(IsFinished), nameof(CanCancel))]
     private ExportJobState _state;

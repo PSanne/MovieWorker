@@ -85,7 +85,17 @@ public sealed class ExportQueueService(MediaToolsService tools)
         {
             var client = tools.Require();
             Directory.CreateDirectory(Path.GetDirectoryName(job.OutputPath)!);
-            var ffmpegJob = ExportBuilder.Build(job.Snapshot, job.Preset, temp, job.RangeStart, job.RangeEnd);
+            // Lautheit: erst die fertige Mischung messen, dann genau (linear) auf das Ziel bringen.
+            Core.Audio.LoudnessMeasurement? loudness = null;
+            if (job.Snapshot.Master.LoudnessTarget is not null && !job.Preset.IsStillImage)
+            {
+                job.Detail = "Lautheit wird gemessen …";
+                var measure = ExportBuilder.BuildLoudnessMeasurement(job.Snapshot, job.RangeStart, job.RangeEnd);
+                loudness = Core.Audio.LoudnessMeasurement.Parse(await client.RunForStderrAsync(measure.Arguments, job.Cancellation.Token));
+                job.Measured = loudness;
+            }
+
+            var ffmpegJob = ExportBuilder.Build(job.Snapshot, job.Preset, temp, job.RangeStart, job.RangeEnd, loudness);
             var eta = new EtaEstimator();
             job.Clock.Restart();
             var progress = new Progress<double>(p =>
@@ -97,7 +107,8 @@ public sealed class ExportQueueService(MediaToolsService tools)
             File.Move(temp, job.OutputPath, overwrite: true);
             job.Progress = 1;
             job.State = ExportJobState.Done;
-            job.Detail = $"Fertig in {Core.Time.Timecode.FormatDuration(job.Clock.Elapsed)} · {MediaItemViewModel.FormatSize(new FileInfo(job.OutputPath).Length)}";
+            job.Detail = $"Fertig in {Core.Time.Timecode.FormatDuration(job.Clock.Elapsed)} · {MediaItemViewModel.FormatSize(new FileInfo(job.OutputPath).Length)}"
+                + (loudness is null ? string.Empty : $" · Ton auf {job.Snapshot.Master.LoudnessTarget:0} LUFS gebracht (vorher {loudness.IntegratedLufs:0.0})");
         }
         catch (OperationCanceledException)
         {

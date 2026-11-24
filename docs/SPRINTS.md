@@ -18,8 +18,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 10 | Mehrspur, Multicam & Mischmodi | ✅ fertig |
 | 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | ✅ fertig |
 | 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | ✅ fertig |
-| 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | ⏳ als Nächstes |
-| 14 | Ton II: ADR, Sprachaufnahme, Surround/räumlicher Ton | geplant |
+| 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | ✅ fertig |
+| 14 | Ton II: ADR, Sprachaufnahme, Surround/räumlicher Ton | ⏳ als Nächstes |
 | 15 | Effekte & Compositing: Keying, Masken, Tracking, Knoten-Editor | geplant |
 | 16 | Feinschliff & Version 1.0 | geplant |
 
@@ -105,10 +105,11 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Masken (Rechteck, Ellipse) mit weicher Kante, Korrekturknoten (seriell)
 - Tracking: Maske folgt einem Objekt
 
-## Sprint 13 – Ton I
-- Mischpult mit Spurfadern, Pegelanzeigen, Panorama
-- Effekte: EQ, Kompressor, Hall, Hochpass; Lautheit messen und normalisieren (−14 LUFS YouTube, −23 LUFS EBU R128)
-- Auto-Ducking (Musik leiser bei Sprache), Rauschminderung
+## Sprint 13 – Ton I ✅
+- Mischpult mit Spurfadern, Pegelanzeigen, Panorama, Stumm/Solo und Summe (Master) mit Limiter
+- Effekte je Spur: Hochpass, Rauschminderung, 3-Band-EQ, Kompressor, Hall
+- Lautheit messen und beim Export genau normalisieren (zwei Durchgänge; −14 LUFS YouTube, −16 Podcast, −23 EBU R128)
+- Auto-Ducking (Musik leiser bei Sprache) per Sidechain-Kompressor
 
 ## Sprint 14 – Ton II
 - Sprachaufnahme (Voice-over) direkt in die Timeline

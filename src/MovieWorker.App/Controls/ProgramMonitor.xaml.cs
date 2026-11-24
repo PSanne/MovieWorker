@@ -269,6 +269,7 @@ public partial class ProgramMonitor : UserControl
                 Video.Position = TimeSpan.FromSeconds(seconds);
                 Video.SpeedRatio = Math.Max(0.05, _currentVideo.Clip.Speed * _speed);
                 Video.Volume = Math.Min(1, _currentVideo.Volume);
+                Video.Balance = _currentVideo.Balance;
                 Video.IsMuted = _currentVideo.Volume <= 0 || Math.Abs(_currentVideo.Clip.Speed - 1) > 1e-6;
                 Video.Play();
                 Video.Visibility = Visibility.Visible;
@@ -302,6 +303,7 @@ public partial class ProgramMonitor : UserControl
 
                 entry.Player.Position = TimeSpan.FromSeconds(seconds);
                 entry.Player.Volume = Math.Min(1, source.Volume);
+                entry.Player.Balance = source.Balance;
                 entry.Player.SpeedRatio = Math.Max(0.05, source.Clip.Speed * _speed);
                 entry.Player.Play();
             }

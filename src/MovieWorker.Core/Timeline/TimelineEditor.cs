@@ -978,6 +978,35 @@ public sealed class TimelineEditor
         UpdateClip(clipId, transition is null ? "Übergang entfernen" : "Übergang", c => c.TransitionIn = transition?.Clone());
 
     /// <summary>Spur stumm/aktiv schalten.</summary>
+    /// <summary>Ändert den Kanalzug einer Spur (Fader, Panorama, Effekte, Ducking) – aufeinanderfolgende Änderungen werden zusammengefasst.</summary>
+    public bool SetTrackAudio(Guid trackId, string description, Action<TimelineTrack> change) =>
+        Modify(description, $"mix:{trackId}:{description}", p =>
+        {
+            var track = p.Tracks.FirstOrDefault(t => t.Id == trackId);
+            if (track is null)
+            {
+                return false;
+            }
+
+            var before = System.Text.Json.JsonSerializer.Serialize(track.Audio) + track.VolumeDb.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            change(track);
+            if (track.Audio.DuckBy == track.Id)
+            {
+                track.Audio.DuckBy = null;
+            }
+
+            return before != System.Text.Json.JsonSerializer.Serialize(track.Audio) + track.VolumeDb.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        });
+
+    /// <summary>Ändert die Summe (Master): Lautstärke, Limiter, Lautheits-Ziel.</summary>
+    public bool SetMaster(string description, Action<Audio.MasterAudio> change) =>
+        Modify(description, $"master:{description}", p =>
+        {
+            var before = System.Text.Json.JsonSerializer.Serialize(p.Master);
+            change(p.Master);
+            return before != System.Text.Json.JsonSerializer.Serialize(p.Master);
+        });
+
     public bool SetTrackMuted(Guid trackId, bool muted) =>
         Modify(muted ? "Spur stumm" : "Spur aktiv", p =>
         {

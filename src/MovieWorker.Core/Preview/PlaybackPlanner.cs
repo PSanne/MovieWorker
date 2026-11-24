@@ -12,12 +12,17 @@ public sealed record PlaybackSource(
     double SourceSeconds,
     string PreviewPath,
     string OriginalPath,
-    double OriginalSeconds)
+    double OriginalSeconds,
+    bool Audible = true,
+    double MasterDb = 0)
 {
-    /// <summary>Lautstärke als Faktor (0…1+) aus Clip- und Spurlautstärke.</summary>
-    public double Volume => Track.Muted || Clip.AudioMuted || !Clip.HasAudio
+    /// <summary>Lautstärke als Faktor (0…1+) aus Clip-, Spur- und Summenlautstärke (Stumm/Solo berücksichtigt).</summary>
+    public double Volume => !Audible || Track.Muted || Clip.AudioMuted || !Clip.HasAudio
         ? 0
-        : Math.Pow(10, (Clip.VolumeDb + Track.VolumeDb) / 20);
+        : Math.Pow(10, (Clip.VolumeDb + Track.VolumeDb + MasterDb) / 20);
+
+    /// <summary>Panorama der Spur (−1 links … +1 rechts) für die Vorschau.</summary>
+    public double Balance => Math.Clamp(Track.Audio.Pan, -1, 1);
 }
 
 /// <summary>
@@ -137,6 +142,7 @@ public static class PlaybackPlanner
             }
         }
 
-        return new PlaybackSource(track, clip, media, seconds, previewPath, originalPath, originalSeconds);
+        return new PlaybackSource(track, clip, media, seconds, previewPath, originalPath, originalSeconds,
+            project.IsAudible(track), project.Master.VolumeDb);
     }
 }
