@@ -13,9 +13,21 @@ if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
 }
 
 if (Test-Path $logPath) {
-    Get-Content $logPath | ForEach-Object {
-        Write-Host $_
-        if ($_ -like '*FEHLER*') { Write-Host "::error::$_" }
+    $lines = Get-Content $logPath
+    $lines | ForEach-Object { Write-Host $_ }
+    $errorIndex = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -like '*FEHLER*') {
+            if ($errorIndex -lt 0) { $errorIndex = $i }
+            Write-Host "::error::$($lines[$i])"
+        }
+    }
+
+    if ($errorIndex -ge 0) {
+        # Kontext für die Fehlersuche: letzte erfolgreiche Prüfungen und die Aufrufliste.
+        $from = [Math]::Max(0, $errorIndex - 3)
+        $context = ($lines[$from..([Math]::Min($lines.Count - 1, $errorIndex + 8))]) -join ' | '
+        Write-Host "::warning::Kontext: $context"
     }
 } else {
     Write-Host '::error::Der Selbsttest hat kein Protokoll geschrieben (Absturz beim Start?).'

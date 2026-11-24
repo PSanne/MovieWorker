@@ -72,7 +72,9 @@ public partial class MainWindow : Window
         if (await _viewModel.ConfirmDiscardAsync())
         {
             _allowClose = true;
-            Close();
+
+            // Nicht innerhalb des laufenden Schließvorgangs erneut schließen.
+            _ = Dispatcher.BeginInvoke(Close);
         }
     }
 

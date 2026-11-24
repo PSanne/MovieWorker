@@ -28,14 +28,15 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         _projectName = projectName;
         _dialogs = dialogs;
         _settings = settings;
-        Folder = settings.Settings.LastExportFolder is { } f && Directory.Exists(f)
+        // Reihenfolge wichtig: erst Vorlage, dann alles, was eine Prüfung auslöst.
+        _selectedPreset = ExportPreset.Find(settings.Settings.LastExportPresetId) ?? ExportPreset.Default;
+        _selectedReframe = ReframeChoices.First(r => r.Mode == _selectedPreset.Reframe);
+        _fileName = ExportNaming.Suggest(projectName, _selectedPreset);
+        _folder = settings.Settings.LastExportFolder is { } f && Directory.Exists(f)
             ? f
             : Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
         HasRange = project.HasRange;
-        UseRange = HasRange;
-        _selectedPreset = ExportPreset.Find(settings.Settings.LastExportPresetId) ?? ExportPreset.Default;
-        _selectedReframe = ReframeChoices.First(r => r.Mode == _selectedPreset.Reframe);
-        FileName = ExportNaming.Suggest(projectName, _selectedPreset);
+        _useRange = HasRange;
         Refresh();
     }
 
