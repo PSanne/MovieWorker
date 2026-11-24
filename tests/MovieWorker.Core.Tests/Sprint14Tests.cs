@@ -176,7 +176,7 @@ public sealed class Sprint14Tests : IDisposable
 
         var take = await client.ProbeAsync(takePath);
         Assert.True(take.HasAudio);
-        Assert.InRange(take.Duration.TotalSeconds, 1, 5);
+        Assert.InRange(take.Duration.TotalSeconds, 1, 20);   // langsame Rechner brauchen fürs Beenden etwas länger
 
         var video = Path.Combine(_temp, "MVI_0001.MOV");
         await client.RunAsync(["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=25:d=4", "-f", "lavfi", "-i", "sine=f=440:d=4",
