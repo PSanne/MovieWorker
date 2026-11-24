@@ -675,6 +675,69 @@ public static class SmokeTest
         clipCount = vm.Project.AllClips.Count();
         imported = [.. imported, .. vm.MediaItems.Skip(imported.Count)];
 
+        // ---- Effekte & Compositing (Sprint 15): Greenscreen, Pipette, Effektmasken mit Tracking, Knoten-Editor
+        var greenFile = Path.Combine(c.Temp, "Greenscreen.mp4");
+        await tools.Require().RunAsync(["-y", "-v", "error", "-f", "lavfi", "-i",
+            "color=c=0x00B140:s=640x360:r=25:d=3,drawbox=x=260:y=100:w=120:h=160:c=0xD03030:t=fill",
+            "-f", "lavfi", "-i", "sine=f=500:d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", greenFile], 0);
+        var greenMedia = (await vm.ImportPathsAsync([greenFile])).Single();
+        var fxTrack = vm.Editor.AddTrack(Core.Timeline.TrackKind.Video, "Greenscreen");
+        var fxStart = vm.Project.VideoTracks.First().Clips.OrderBy(cl => cl.StartFrame).First().StartFrame + 5;
+        c.Check(vm.Editor.Insert(fxTrack, vm.Editor.CreateClip(greenMedia.Model, 0, 2), fxStart), "Greenscreen-Clip auf eigene Spur gelegt");
+        var greenClip = vm.Project.Tracks.First(t => t.Id == fxTrack.Id).Clips.Single();
+        vm.SelectedClipId = greenClip.Id;
+        window.EffectsTab.IsSelected = true;
+        await Settle();
+        vm.AddEffectFromMenuCommand.Execute("ChromaKey");
+        var fx = vm.SelectedClip!.Effects;
+        c.Check(fx.IsChromaKey && vm.Project.FindClip(greenClip.Id)!.Value.Clip.Effects.Count == 1, "Greenscreen-Effekt hinzugefügt");
+        vm.PlayheadFrame = fxStart + 10;
+        c.Check(await vm.PickKeyColorAsync(0.05, 0.05) && fx.KeyColor.StartsWith("#0", StringComparison.Ordinal), "Pipette: Key-Farbe " + fx.KeyColor);
+        fx.Spill = 0.6;
+        fx.Softness = 0.15;
+        async Task<byte[]> KeyFrame() =>
+            await tools.Require().RunForBytesAsync(MovieWorker.Core.Export.ExportBuilder.BuildRawFrame(vm.Project, fxStart + 10, 180).Arguments);
+        var keyRaw = await KeyFrame();
+        fx.Enabled = false;
+        var plainRaw = await KeyFrame();
+        fx.Enabled = true;
+        var keyWidth = keyRaw.Length / 3 / 180;
+        var px = (10 * keyWidth + 10) * 3;
+        var mid = (90 * keyWidth + keyWidth / 2) * 3;
+        var cornerChange = Math.Abs(keyRaw[px] - plainRaw[px]) + Math.Abs(keyRaw[px + 1] - plainRaw[px + 1]) + Math.Abs(keyRaw[px + 2] - plainRaw[px + 2]);
+        var midChange = Math.Abs(keyRaw[mid] - plainRaw[mid]) + Math.Abs(keyRaw[mid + 1] - plainRaw[mid + 1]) + Math.Abs(keyRaw[mid + 2] - plainRaw[mid + 2]);
+        c.Check(plainRaw[px + 1] > 120 && cornerChange > 60 && midChange < 40 && keyRaw[mid] > 150,
+            $"Grün ist weg, die Figur bleibt (Ecke ohne Key {plainRaw[px]},{plainRaw[px + 1]},{plainRaw[px + 2]} → mit Key {keyRaw[px]},{keyRaw[px + 1]},{keyRaw[px + 2]})");
+
+        var faceClip = vm.Project.VideoTracks.First().Clips.First(cl => cl.SourcePaths.Count > 0 && !cl.IsMulticam && cl.HasVideo);
+        vm.SelectedClipId = faceClip.Id;
+        vm.AddEffectFromMenuCommand.Execute("Pixelate+Maske");
+        fx = vm.SelectedClip!.Effects;
+        c.Check(fx.Selected?.Kind == MovieWorker.Core.Effects.EffectKind.Pixelate && fx.HasMask, "Verpixeln mit Maske angelegt");
+        c.Check(vm.MoveActiveMask(0.45, 0.4, effectsTab: true) && Math.Abs(fx.MaskCenterX - 0.45) < 1e-6, "Maske per Klick platziert");
+        vm.PlayheadFrame = faceClip.StartFrame + 2;
+        c.Check(await vm.TrackEffectMaskAsync() && vm.SelectedClip!.Effects.IsTracked, "Effektmaske verfolgt: " + vm.StatusText);
+        var blurId = vm.SelectedClip!.Effects.AddKind(MovieWorker.Core.Effects.EffectKind.Blur)!.Value;
+        vm.SelectedClip!.Effects.MoveTo(blurId, 0);
+        c.Check(vm.Project.FindClip(faceClip.Id)!.Value.Clip.Effects[0].Id == blurId, "Knoten-Editor: Reihenfolge geändert");
+        vm.SelectedClip!.Effects.ToggleEnabled(blurId);
+        c.Check(!vm.Project.FindClip(faceClip.Id)!.Value.Clip.Effects[0].Enabled, "Knoten-Editor: Effekt ausgeschaltet");
+        vm.CopyEffectsCommand.Execute(null);
+        var otherClip = vm.Project.VideoTracks.First().Clips.First(cl => cl.Id != faceClip.Id && cl.SourcePaths.Count > 0 && !cl.IsMulticam);
+        vm.SelectedClipId = otherClip.Id;
+        vm.PasteEffectsCommand.Execute(null);
+        c.Check(vm.Project.FindClip(otherClip.Id)!.Value.Clip.Effects.Count >= 2, "Effekte kopiert und eingefügt");
+        vm.SelectedClipId = faceClip.Id;
+        vm.PlayheadFrame = faceClip.StartFrame + 5;
+        c.Check(await program.RenderStillNowAsync(), "Vorschau mit Effekten " + program.MessageText);
+        vm.Editor.SetMarks(fxStart, fxStart + 40);
+        var fxJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("web-h264-1080")!, Path.Combine(exportFolder, "effekte.mp4"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(fxJob.State == ExportJobState.Done, "Export mit Greenscreen, Verpixeln und Tracking: " + fxJob.Detail);
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "effekte.png"));
+        clipCount = vm.Project.AllClips.Count();
+        imported = [.. imported, .. vm.MediaItems.Skip(imported.Count)];
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");
@@ -689,6 +752,8 @@ public static class SmokeTest
         c.Check(vm.Project.Master.LoudnessTarget == -14 && vm.Project.Tracks.Any(t => t.Audio.DuckBy is not null), "Mischpult-Einstellungen gespeichert");
         c.Check(vm.Project.AdrCues.Count == 1 && vm.Project.AdrCues[0].Takes.Count >= 2 && vm.Project.VideoTracks.First().Audio.Center > 0.99,
             "ADR-Szenen und Raumklang gespeichert");
+        c.Check(vm.Project.AllClips.Any(cl => cl.Effects.Any(e => e.Kind == MovieWorker.Core.Effects.EffectKind.ChromaKey))
+                && vm.Project.AllClips.Any(cl => cl.Effects.Any(e => e.Mask?.TrackX is { Keys.Count: > 0 })), "Effekte mit verfolgter Maske gespeichert");
 
         // ---- Karten-Import (kopieren + Prüfsumme)
         var plan = CardImporter.Plan(CardScanner.Scan(c.MediaFolder), Path.Combine(c.Temp, "Import"), DateTime.Today, "EOS 70D");

@@ -896,6 +896,69 @@ public sealed class TimelineEditor
         });
     }
 
+    /// <summary>Effekt ans Ende der Effektkette eines Clips anhängen. Liefert die Effekt-ID.</summary>
+    public Guid? AddEffect(Guid clipId, Effects.EffectKind kind)
+    {
+        var effect = new Effects.VideoEffect
+        {
+            Kind = kind,
+            Amount = kind switch
+            {
+                Effects.EffectKind.ChromaKey => 0.35,
+                Effects.EffectKind.LumaKey => 0.15,
+                Effects.EffectKind.Pixelate => 0.5,
+                Effects.EffectKind.BlackWhite => 1,
+                Effects.EffectKind.Sepia => 0.8,
+                Effects.EffectKind.FilmGrain => 0.3,
+                _ => 0.5,
+            },
+        };
+        return UpdateClip(clipId, "Effekt: " + effect.Name, c => c.Effects.Add(effect.Clone())) ? effect.Id : null;
+    }
+
+    /// <summary>Einstellungen eines Effekts ändern (aufeinanderfolgende Änderungen werden zusammengefasst).</summary>
+    public bool UpdateEffect(Guid clipId, Guid effectId, string description, Action<Effects.VideoEffect> change) =>
+        Modify(description, $"fx:{clipId}:{effectId}:{description}", p =>
+        {
+            if (p.FindClip(clipId) is not (_, { } clip) || clip.Effects.FirstOrDefault(e => e.Id == effectId) is not { } effect)
+            {
+                return false;
+            }
+
+            change(effect);
+            return true;
+        });
+
+    public bool RemoveEffect(Guid clipId, Guid effectId) =>
+        UpdateClip(clipId, "Effekt entfernen", c => c.Effects.RemoveAll(e => e.Id == effectId));
+
+    /// <summary>Effekt in der Kette verschieben (Knoten-Editor).</summary>
+    public bool MoveEffect(Guid clipId, Guid effectId, int newIndex) =>
+        Modify("Effekt verschieben", p =>
+        {
+            if (p.FindClip(clipId) is not (_, { } clip))
+            {
+                return false;
+            }
+
+            var index = clip.Effects.FindIndex(e => e.Id == effectId);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            newIndex = Math.Clamp(newIndex, 0, clip.Effects.Count - 1);
+            if (newIndex == index)
+            {
+                return false;
+            }
+
+            var effect = clip.Effects[index];
+            clip.Effects.RemoveAt(index);
+            clip.Effects.Insert(newIndex, effect);
+            return true;
+        });
+
     public void ChangeSettings(ProjectSettings settings)
     {
         Modify("Projekteinstellungen", p =>

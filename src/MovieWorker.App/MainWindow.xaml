@@ -110,6 +110,16 @@
                 <Separator />
                 <MenuItem Header="_LUT-Ordner festlegen …" Command="{Binding SetLutFolderCommand}" />
             </MenuItem>
+            <MenuItem Header="Effe_kte">
+                <MenuItem Header="_Greenscreen freistellen" Command="{Binding AddEffectFromMenuCommand}" CommandParameter="ChromaKey" />
+                <MenuItem Header="Gesicht / Kennzeichen _verpixeln (mit Maske)" Command="{Binding AddEffectFromMenuCommand}" CommandParameter="Pixelate+Maske" />
+                <MenuItem Header="_Weichzeichnen" Command="{Binding AddEffectFromMenuCommand}" CommandParameter="Blur" />
+                <MenuItem Header="_Schwarzweiß" Command="{Binding AddEffectFromMenuCommand}" CommandParameter="BlackWhite" />
+                <MenuItem Header="Verwacklung _reduzieren" Command="{Binding AddEffectFromMenuCommand}" CommandParameter="Stabilize" />
+                <Separator />
+                <MenuItem Header="Effekte _kopieren" Command="{Binding CopyEffectsCommand}" />
+                <MenuItem Header="Effekte _einfügen" Command="{Binding PasteEffectsCommand}" />
+            </MenuItem>
             <MenuItem Header="_Ton">
                 <MenuItem Header="_Mischpult" Click="ShowMixer_Click" />
                 <MenuItem Header="_Lautheit messen" Command="{Binding Mixer.MeasureLoudnessCommand}" />
@@ -678,6 +688,111 @@
                                 <Image Source="{Binding ScopeImage}" Stretch="Fill" />
                             </Border>
                             <TextBlock Style="{StaticResource Hint}" Text="Zeigt das Bild am Abspielkopf – wird im Stillstand automatisch aktualisiert, solange dieser Reiter offen ist." />
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+                <TabItem Header="Effekte" x:Name="EffectsTab">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="8">
+                            <TextBlock Text="Klicke einen Clip in der Timeline an, um seine Effekte zu bearbeiten." Style="{StaticResource Hint}"
+                                       Visibility="{Binding SelectedClip, Converter={StaticResource NullToVisibility}, ConverterParameter=invert}" />
+                            <StackPanel DataContext="{Binding SelectedClip.Effects}" Visibility="{Binding Converter={StaticResource NullToVisibility}}">
+                                <TextBlock Text="Effekt hinzufügen" Style="{StaticResource SectionHeader}" Margin="0,0,0,4" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Hinzufügen" Padding="8,1" Margin="4,0,0,0" Command="{Binding AddCommand}" />
+                                    <ComboBox ItemsSource="{Binding Source={x:Static vm:EffectsViewModel.Kinds}}" SelectedItem="{Binding KindToAdd}" DisplayMemberPath="Label" />
+                                </DockPanel>
+
+                                <TextBlock Text="Knoten-Editor" Style="{StaticResource SectionHeader}" />
+                                <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                                           Text="Die Effekte wirken von oben nach unten. Klick wählt, Ziehen ändert die Reihenfolge, Doppelklick schaltet an/aus (Strg+↑/↓ verschiebt)." />
+                                <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="3" Margin="0,4,0,0">
+                                    <c:EffectNodeEditor x:Name="EffectNodes" MinHeight="100" />
+                                </Border>
+
+                                <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}" Margin="0,6,0,0">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="Entfernen" Padding="6,0" Margin="2,0,0,0" Command="{Binding RemoveCommand}" />
+                                        <Button DockPanel.Dock="Right" Content="▼" Width="24" Margin="2,0,0,0" Command="{Binding MoveDownCommand}" ToolTip="Nach unten (später)" />
+                                        <Button DockPanel.Dock="Right" Content="▲" Width="24" Margin="2,0,0,0" Command="{Binding MoveUpCommand}" ToolTip="Nach oben (früher)" />
+                                        <TextBlock Text="{Binding SelectedTitle}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                    <CheckBox Content="Aktiv" IsChecked="{Binding Enabled}" Margin="0,4" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding AmountLabel}" VerticalAlignment="Center" />
+                                        <Slider Grid.Column="1" Margin="0,2" Minimum="0" Maximum="1" Value="{Binding Amount}" SmallChange="0.01" LargeChange="0.1" />
+                                    </Grid>
+
+                                    <StackPanel Visibility="{Binding IsChromaKey, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="Freistellen" Style="{StaticResource SectionHeader}" />
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Left" Width="22" Height="22" CornerRadius="3" BorderBrush="#999" BorderThickness="1"
+                                                    Background="{Binding KeyColor}" Margin="0,0,6,0" />
+                                            <Button DockPanel.Dock="Right" Content="Blau" Padding="6,0" Margin="2,0,0,0" Command="{Binding SetKeyColorCommand}" CommandParameter="#0047BB" />
+                                            <Button DockPanel.Dock="Right" Content="Grün" Padding="6,0" Margin="4,0,0,0" Command="{Binding SetKeyColorCommand}" CommandParameter="#00B140" />
+                                            <TextBox Text="{Binding KeyColor, UpdateSourceTrigger=LostFocus}" VerticalContentAlignment="Center"
+                                                     ToolTip="Farbe, die durchsichtig wird (#RRGGBB) – oder im Programmmonitor mit gedrückter Strg-Taste auf den Hintergrund klicken" />
+                                        </DockPanel>
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition /><RowDefinition />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="Weiche Kante" VerticalAlignment="Center" />
+                                            <Slider Grid.Column="1" Margin="0,2" Minimum="0" Maximum="1" Value="{Binding Softness}" SmallChange="0.01" LargeChange="0.1" />
+                                            <TextBlock Grid.Row="1" Text="Spill weg" VerticalAlignment="Center"
+                                                       ToolTip="Spill-Unterdrückung: entfernt den grünen bzw. blauen Farbsaum an Haaren und Kanten" />
+                                            <Slider Grid.Row="1" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="1" Value="{Binding Spill}" SmallChange="0.01" LargeChange="0.1" />
+                                        </Grid>
+                                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                                                   Text="Den Greenscreen-Clip auf V2 legen, den neuen Hintergrund darunter auf V1. Toleranz erhöhen, bis der Hintergrund weg ist; Spill entfernt grüne Ränder." />
+                                    </StackPanel>
+                                    <CheckBox Content="Dunkles freistellen (sonst Helles)" IsChecked="{Binding KeyDark}" Margin="0,4"
+                                              Visibility="{Binding IsLumaKey, Converter={StaticResource BoolToVisibility}}" />
+
+                                    <TextBlock Text="Maske" Style="{StaticResource SectionHeader}" />
+                                    <CheckBox Content="{Binding MaskCheckText}"
+                                              IsChecked="{Binding HasMask}" />
+                                    <TextBlock Text="{Binding MaskHint}" Style="{StaticResource Hint}" TextWrapping="Wrap" />
+                                    <Grid Visibility="{Binding HasMask, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Form" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Column="1" Margin="0,2" ItemsSource="{Binding Source={x:Static vm:ColorViewModel.MaskShapes}}" SelectedItem="{Binding MaskShape}"
+                                                  DisplayMemberPath="Label" />
+                                        <TextBlock Grid.Row="1" Text="Mitte X" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="1" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="1" Value="{Binding MaskCenterX}" />
+                                        <TextBlock Grid.Row="2" Text="Mitte Y" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="2" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="1" Value="{Binding MaskCenterY}" />
+                                        <TextBlock Grid.Row="3" Text="Breite" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="3" Grid.Column="1" Margin="0,2" Minimum="0.02" Maximum="1.5" Value="{Binding MaskWidth}" />
+                                        <TextBlock Grid.Row="4" Text="Höhe" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="4" Grid.Column="1" Margin="0,2" Minimum="0.02" Maximum="1.5" Value="{Binding MaskHeight}" />
+                                        <TextBlock Grid.Row="5" Text="Weiche Kante" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="5" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="1" Value="{Binding MaskFeather}" />
+                                        <CheckBox Grid.Row="6" Grid.Column="1" Margin="0,2" Content="Umkehren (außen wirken)" IsChecked="{Binding MaskInvert}" />
+                                        <DockPanel Grid.Row="7" Grid.ColumnSpan="2" Margin="0,4,0,0">
+                                            <Button DockPanel.Dock="Left" Content="Verfolgen ▶" Padding="8,1"
+                                                    Command="{Binding DataContext.TrackEffectMaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    ToolTip="Maske auf das Objekt legen, Abspielkopf in den Clip setzen – die Maske folgt dem Objekt bis zu 10 Sekunden" />
+                                            <Button DockPanel.Dock="Right" Content="Löschen" Padding="6,1" Command="{Binding ClearTrackingCommand}" ToolTip="Verfolgung löschen" />
+                                            <TextBlock Text="{Binding TrackText}" VerticalAlignment="Center" Margin="8,0" />
+                                        </DockPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>

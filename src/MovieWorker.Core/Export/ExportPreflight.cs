@@ -145,6 +145,13 @@ public static class ExportPreflight
             issues.Add(new(IssueSeverity.Info, "Der Raumklang (5.1) wird für diese Vorlage nach Stereo heruntergemischt (ITU-Norm)."));
         }
 
+        // Freistellen auf der Hauptspur
+        if (project.VideoTracks.FirstOrDefault()?.Clips.Any(c => c.Effects.Any(e => e.Enabled && e.IsKey)) == true)
+        {
+            issues.Add(new(IssueSeverity.Info,
+                "Ein freigestellter Clip (Key) liegt auf V1 – dahinter ist Schwarz. Für einen neuen Hintergrund den Hintergrund auf V1 und den Greenscreen-Clip auf V2 legen."));
+        }
+
         return issues;
     }
 

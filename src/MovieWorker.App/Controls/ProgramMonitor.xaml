@@ -18,7 +18,7 @@
                 <Button Content="⏭" Width="34" Margin="2" ToolTip="Zum Ende (Ende)" Click="OnEnd" />
             </StackPanel>
         </DockPanel>
-        <Grid x:Name="Screen" Background="Black" ClipToBounds="True">
+        <Grid x:Name="Screen" Background="Black" ClipToBounds="True" PreviewMouseLeftButtonDown="OnScreenMouseDown">
             <MediaElement x:Name="Video" LoadedBehavior="Manual" UnloadedBehavior="Manual" Stretch="Uniform"
                           MediaOpened="OnMediaOpened" MediaFailed="OnMediaFailed" Visibility="Hidden" />
             <Image x:Name="Still" Stretch="Uniform" />

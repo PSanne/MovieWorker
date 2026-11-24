@@ -249,6 +249,12 @@ public sealed class TimelineClip
     /// <summary>Stelle in der Quelle (Sekunden) für ein Timeline-Bild.</summary>
     public double SourceTimeAt(long frame, FrameRate rate) => SourceIn + rate.FramesToSeconds(frame - StartFrame) * Speed;
 
+    /// <summary>Videoeffekte (Keying, Weichzeichnen, Verpixeln …) – wirken nacheinander nach der Farbkorrektur.</summary>
+    public List<Effects.VideoEffect> Effects { get; set; } = [];
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasActiveEffects => Effects.Any(e => e.Enabled);
+
     public TimelineClip Clone()
     {
         var copy = (TimelineClip)MemberwiseClone();
@@ -262,6 +268,7 @@ public sealed class TimelineClip
         copy.TransitionIn = TransitionIn?.Clone();
         copy.MulticamAngles = MulticamAngles?.Select(a => a.Clone()).ToList();
         copy.Title = Title?.Clone();
+        copy.Effects = Effects.Select(e => e.Clone()).ToList();
         return copy;
     }
 }

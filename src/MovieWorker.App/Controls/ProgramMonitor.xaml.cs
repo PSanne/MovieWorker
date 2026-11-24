@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using MovieWorker.App.ViewModels;
@@ -54,6 +55,9 @@ public partial class ProgramMonitor : UserControl
 
     /// <summary>Ein exaktes Standbild wurde angezeigt (z. B. für die Messinstrumente).</summary>
     public event EventHandler? StillRendered;
+
+    /// <summary>Klick ins Bild mit Strg oder Umschalt: Stelle in Bildanteilen (0 … 1) und gedrückte Tasten.</summary>
+    public event EventHandler<(double U, double V, ModifierKeys Modifiers)>? ImageClicked;
 
     /// <summary>Anzahl fertig gerenderter Standbilder (für den Selbsttest).</summary>
     public int StillsRendered { get; private set; }
@@ -541,6 +545,28 @@ public partial class ProgramMonitor : UserControl
                 TitleOverlay.Children.Add(block1);
                 y += sizes[i] * 1.3;
             }
+        }
+    }
+
+    private void OnScreenMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        var modifiers = Keyboard.Modifiers;
+        if (_vm is null || (modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == 0)
+        {
+            return;
+        }
+
+        var settings = _vm.Project.Settings;
+        var aspect = (double)settings.Width / settings.Height;
+        var (w, h) = (Screen.ActualWidth, Screen.ActualHeight);
+        var (vw, vh) = w / h > aspect ? (h * aspect, h) : (w, w / aspect);
+        var p = e.GetPosition(Screen);
+        var u = (p.X - (w - vw) / 2) / vw;
+        var v = (p.Y - (h - vh) / 2) / vh;
+        if (u is >= 0 and <= 1 && v is >= 0 and <= 1)
+        {
+            ImageClicked?.Invoke(this, (u, v, modifiers));
+            e.Handled = true;
         }
     }
 

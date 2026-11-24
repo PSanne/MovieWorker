@@ -126,6 +126,26 @@ public static class ExportBuilder
                 vf.Clear();
             }
 
+            // Effekte (Keying, Weichzeichnen, Verpixeln …), mit Masken über eigene Zweige.
+            if (clip.HasActiveEffects)
+            {
+                if (vf.Count > 0)
+                {
+                    graph.Append(CultureInfo.InvariantCulture, $"{videoIn}{string.Join(',', vf)}[fx{segment}];");
+                    videoIn = $"[fx{segment}]";
+                    vf.Clear();
+                }
+
+                videoIn = ApplyEffects(graph, videoIn, clip, width, height, rate, $"e{segment}", keepAlpha: false);
+                if (clip.Effects.Any(e => e.Enabled && e.IsKey))
+                {
+                    // Freigestellter Clip auf der Hauptspur: über Schwarz legen.
+                    graph.Append(CultureInfo.InvariantCulture,
+                        $"color=c=black:s={width}x{height}:r={rate.ToFfmpeg()},format={pixelFormat}[kb{segment}];[kb{segment}]{videoIn}overlay=shortest=1:format=auto,format={pixelFormat}[kv{segment}];");
+                    videoIn = $"[kv{segment}]";
+                }
+            }
+
             vf.AddRange(TransformFilters.For(clip, width, height, rate));
             vf.Add($"trim=duration={durationText}");
             vf.Add($"tpad=stop_mode=clone:stop_duration={durationText}");
@@ -408,6 +428,19 @@ public static class ExportBuilder
         }
 
         vf.Add($"fps={rate.ToFfmpeg()}");
+        if (clip.HasActiveEffects)
+        {
+            // Effekte auf Bildgröße rechnen (Rand durchsichtig), damit Masken im Bild an der richtigen Stelle sitzen.
+            vf.Add($"scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos");
+            vf.Add("format=yuva420p");
+            vf.Add($"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0");
+            vf.Add("setsar=1");
+            graph.Append(CultureInfo.InvariantCulture, $"{videoIn}{string.Join(',', vf)}[oe{layer}];");
+            videoIn = ApplyEffects(graph, $"[oe{layer}]", clip, width, height, rate, $"oe{layer}x", keepAlpha: true);
+            vf.Clear();
+            vf.Add("setsar=1");
+        }
+
         var t = clip.Transform;
         var output = $"[comp{layer}]";
 
@@ -517,6 +550,68 @@ public static class ExportBuilder
             var output = $"[{id}end]";
             graph.Append(CultureInfo.InvariantCulture, $"{current}{(pending.Count == 0 ? "null" : string.Join(',', pending))}{output};");
             current = output;
+        }
+
+        return current;
+    }
+
+    /// <summary>
+    /// Effektkette: Effekte ohne Maske direkt hintereinander, mit Maske über einen Zweig (Effekt nur innerhalb der Maske).
+    /// Bei Keys mit Maske („Garbage Matte“) wird der Alphakanal des Keys mit der Maske multipliziert.
+    /// </summary>
+    private static string ApplyEffects(StringBuilder graph, string input, TimelineClip clip, int width, int height, Time.FrameRate rate,
+        string id, bool keepAlpha)
+    {
+        var current = input;
+        var pending = new List<string>();
+        var k = 0;
+        var (mw, mh) = (Math.Max(2, width / 4 / 2 * 2), Math.Max(2, height / 4 / 2 * 2));
+        string Flush()
+        {
+            var label = $"[{id}f{k}]";
+            graph.Append(CultureInfo.InvariantCulture, $"{current}{(pending.Count == 0 ? "null" : string.Join(',', pending))}{label};");
+            pending.Clear();
+            return label;
+        }
+
+        foreach (var effect in clip.Effects.Where(e => e.Enabled))
+        {
+            var filter = effect.Filter(width, height);
+            if (effect.Mask is not { } mask)
+            {
+                pending.Add(filter);
+                continue;
+            }
+
+            var flushed = Flush();
+            var maskChain = $"scale={mw}:{mh},format=gray,geq=lum='255*({mask.ToExpression(rate)})',scale={width}:{height}:flags=bilinear";
+            var output = $"[{id}o{k}]";
+            if (effect.IsKey)
+            {
+                graph.Append(CultureInfo.InvariantCulture, $"{flushed}split=2[{id}kk{k}][{id}km{k}];");
+                graph.Append(CultureInfo.InvariantCulture, $"[{id}kk{k}]{filter},split=2[{id}kc{k}][{id}kx{k}];");
+                graph.Append(CultureInfo.InvariantCulture, $"[{id}km{k}]{maskChain}[{id}kmk{k}];");
+                graph.Append(CultureInfo.InvariantCulture, $"[{id}kx{k}]alphaextract[{id}kal{k}];");
+                graph.Append(CultureInfo.InvariantCulture, $"[{id}kal{k}][{id}kmk{k}]blend=all_mode=multiply[{id}kam{k}];");
+                graph.Append(CultureInfo.InvariantCulture, $"[{id}kc{k}][{id}kam{k}]alphamerge,format=yuva420p{output};");
+            }
+            else
+            {
+                graph.Append(CultureInfo.InvariantCulture, $"{flushed}split=3[{id}b{k}][{id}g{k}][{id}m{k}];");
+                graph.Append(CultureInfo.InvariantCulture, $"[{id}g{k}]{filter},format=yuva444p[{id}gl{k}];");
+                graph.Append(CultureInfo.InvariantCulture, $"[{id}m{k}]{maskChain}[{id}mk{k}];");
+                graph.Append(CultureInfo.InvariantCulture, $"[{id}gl{k}][{id}mk{k}]alphamerge[{id}ga{k}];");
+                graph.Append(CultureInfo.InvariantCulture,
+                    $"[{id}b{k}][{id}ga{k}]overlay=format=auto{(keepAlpha ? ",format=yuva420p" : string.Empty)}{output};");
+            }
+
+            current = output;
+            k++;
+        }
+
+        if (pending.Count > 0)
+        {
+            current = Flush();
         }
 
         return current;

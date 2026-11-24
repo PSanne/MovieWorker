@@ -20,8 +20,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | ✅ fertig |
 | 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | ✅ fertig |
 | 14 | Ton II: ADR, Sprachaufnahme, Surround/räumlicher Ton | ✅ fertig |
-| 15 | Effekte & Compositing: Keying, Masken, Tracking, Knoten-Editor | ⏳ als Nächstes |
-| 16 | Feinschliff & Version 1.0 | geplant |
+| 15 | Effekte & Compositing: Keying, Masken, Tracking, Knoten-Editor | ✅ fertig |
+| 16 | Feinschliff & Version 1.0 | ⏳ als Nächstes |
 
 ---
 
@@ -117,10 +117,11 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Surround (5.1) und räumlicher Ton: je Spur vorne/hinten, Center, Subwoofer (mit Tiefpass), Vorlagen Dialog/Musik/Atmo/Effekt
 - Stereo-Downmix nach ITU-Norm, 5.1-Vorlagen (MP4 mit AAC 5.1, WAV 6 Kanäle)
 
-## Sprint 15 – Effekte & Compositing
-- Keying (Greenscreen/Bluescreen) mit Spill-Unterdrückung
-- Masken und Tracking für Effekte (z. B. Gesichter verpixeln)
-- Knoten-Editor für Effektketten
+## Sprint 15 – Effekte & Compositing ✅
+- Keying: Greenscreen/Bluescreen (Chroma-Key) mit Spill-Unterdrückung und Pipette, Luma-Key, Garbage Matte
+- Effekte: Weichzeichnen, Verpixeln, Schärfen, Schwarzweiß, Sepia, Filmkorn, Verwacklung reduzieren
+- Masken und Tracking für Effekte (z. B. Gesichter oder Kennzeichen verpixeln)
+- Knoten-Editor für Effektketten (Reihenfolge ziehen, an/aus), Effekte kopieren/einfügen
 
 ## Sprint 16 – Feinschliff & Version 1.0
 - GPU-Export (NVIDIA NVENC, Intel Quick Sync), schnellere Vorschau

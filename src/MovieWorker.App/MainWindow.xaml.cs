@@ -51,6 +51,23 @@ public partial class MainWindow : Window
             ProgramMonitor.Play(1);
         };
         viewModel.Recording.StopPlaybackRequested += (_, _) => ProgramMonitor.Pause();
+        EffectNodes.SelectionChanged += (_, _) => UpdateMaskOutline();
+        viewModel.EffectsTabRequested += (_, _) =>
+        {
+            EffectsTab.IsSelected = true;
+            UpdateMaskOutline();
+        };
+        ProgramMonitor.ImageClicked += async (_, click) =>
+        {
+            if (click.Modifiers.HasFlag(ModifierKeys.Control) && EffectsTab.IsSelected)
+            {
+                await _viewModel.PickKeyColorAsync(click.U, click.V);
+            }
+            else if (click.Modifiers.HasFlag(ModifierKeys.Shift) && (EffectsTab.IsSelected || ColorTab.IsSelected))
+            {
+                _viewModel.MoveActiveMask(click.U, click.V, EffectsTab.IsSelected);
+            }
+        };
         Inspector.SelectionChanged += (_, e) =>
         {
             if (e.OriginalSource == Inspector)
@@ -128,6 +145,12 @@ public partial class MainWindow : Window
     {
         // In Eingabefeldern gelten die normalen Tasten.
         if (Keyboard.FocusedElement is TextBox or ComboBox or ComboBoxItem or Slider or PasswordBox)
+        {
+            return;
+        }
+
+        // Im Knoten-Editor wählen bzw. verschieben ↑/↓ die Effekte.
+        if (Keyboard.FocusedElement is EffectNodeEditor && e.Key is Key.Up or Key.Down)
         {
             return;
         }
@@ -263,6 +286,10 @@ public partial class MainWindow : Window
         if (ColorTab.IsSelected && _viewModel.ActiveMask is { } active)
         {
             ProgramMonitor.ShowMask(active.Mask, active.FrameInClip);
+        }
+        else if (EffectsTab.IsSelected && _viewModel.ActiveEffectMask is { } effectMask)
+        {
+            ProgramMonitor.ShowMask(effectMask.Mask, effectMask.FrameInClip);
         }
         else
         {

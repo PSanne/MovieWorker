@@ -605,10 +605,184 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     public async Task<bool> TrackMaskAsync()
     {
-        if (SelectedClip?.Color is not { IsNodeSelected: true, Mask: { } mask } color || SelectedClipId is not { } id
-            || Project.FindClip(id) is not (_, { } clip) || clip.SourcePaths.Count == 0)
+        if (SelectedClip?.Color is not { IsNodeSelected: true, Mask: { } mask } color || SelectedClipId is not { } id)
         {
             _dialogs.Error("Zum Verfolgen bitte einen Knoten mit Maske wählen (Reiter Farbe) und die Maske auf das Objekt legen.");
+            return false;
+        }
+
+        var index = color.SelectedNodeIndex;
+        return await TrackMaskCoreAsync(id, mask, (c, tx, ty) =>
+        {
+            if (c.Nodes[index].Mask is { } m)
+            {
+                m.TrackX = tx;
+                m.TrackY = ty;
+            }
+        });
+    }
+
+    /// <summary>Lässt die Maske des gewählten Effekts dem Objekt folgen (z. B. Gesicht verpixeln).</summary>
+    [RelayCommand]
+    public async Task<bool> TrackEffectMaskAsync()
+    {
+        if (SelectedClip?.Effects is not { Selected: { Mask: { } mask } effect } || SelectedClipId is not { } id)
+        {
+            _dialogs.Error("Zum Verfolgen bitte einen Effekt mit Maske wählen (Reiter Effekte) und die Maske auf das Objekt legen.");
+            return false;
+        }
+
+        var effectId = effect.Id;
+        return await TrackMaskCoreAsync(id, mask, (c, tx, ty) =>
+        {
+            if (c.Effects.FirstOrDefault(e => e.Id == effectId)?.Mask is { } m)
+            {
+                m.TrackX = tx;
+                m.TrackY = ty;
+            }
+        });
+    }
+
+    private List<Core.Effects.VideoEffect>? _effectsClipboard;
+
+    /// <summary>Der Reiter „Effekte“ soll angezeigt werden.</summary>
+    public event EventHandler? EffectsTabRequested;
+
+    /// <summary>Effekt aus dem Menü hinzufügen („Pixelate+Maske“ legt gleich eine Maske an, z. B. für Gesichter).</summary>
+    [RelayCommand]
+    private void AddEffectFromMenu(string? kind)
+    {
+        if (SelectedClip?.Effects is not { } effects || SelectedClipId is not { } id)
+        {
+            StatusText = "Bitte zuerst einen Clip in der Timeline anklicken.";
+            return;
+        }
+
+        var withMask = kind?.EndsWith("+Maske", StringComparison.Ordinal) == true;
+        if (!Enum.TryParse<Core.Effects.EffectKind>(kind?.Replace("+Maske", string.Empty, StringComparison.Ordinal), out var parsed))
+        {
+            return;
+        }
+
+        if (effects.AddKind(parsed) is { } effectId && withMask)
+        {
+            Editor.UpdateEffect(id, effectId, "Effektmaske", e => e.Mask = new ColorMask { Width = 0.22, Height = 0.32, Feather = 0.15 });
+        }
+
+        EffectsTabRequested?.Invoke(this, EventArgs.Empty);
+        StatusText = withMask
+            ? "Maske auf das Gesicht legen (Umschalt+Klick ins Bild) und „Verfolgen ▶“ drücken."
+            : $"Effekt „{Core.Effects.VideoEffect.DisplayName(parsed)}“ hinzugefügt.";
+    }
+
+    [RelayCommand]
+    private void CopyEffects()
+    {
+        if (SelectedClipId is { } id && Project.FindClip(id) is (_, { } clip) && clip.Effects.Count > 0)
+        {
+            _effectsClipboard = clip.Effects.Select(e => e.Clone()).ToList();
+            StatusText = $"{clip.Effects.Count} Effekt(e) kopiert.";
+        }
+        else
+        {
+            StatusText = "Der gewählte Clip hat keine Effekte.";
+        }
+    }
+
+    [RelayCommand]
+    private void PasteEffects()
+    {
+        if (_effectsClipboard is not { Count: > 0 } effects || SelectedClipId is not { } id)
+        {
+            StatusText = "Erst Effekte eines Clips kopieren, dann einen anderen Clip wählen.";
+            return;
+        }
+
+        Editor.UpdateClip(id, "Effekte einfügen", c => c.Effects.AddRange(effects.Select(e =>
+        {
+            var copy = e.Clone();
+            copy.Id = Guid.NewGuid();
+            return copy;
+        })));
+        StatusText = $"{effects.Count} Effekt(e) eingefügt.";
+    }
+
+    /// <summary>Pipette: Key-Farbe aus dem Clipbild an der Stelle (u, v) übernehmen (Durchschnitt 3 × 3 Punkte).</summary>
+    public async Task<bool> PickKeyColorAsync(double u, double v)
+    {
+        if (SelectedClip?.Effects is not { Selected: { Kind: Core.Effects.EffectKind.ChromaKey } } effects || SelectedClipId is not { } id
+            || Project.FindClip(id) is not (_, { } clip) || clip.SourcePaths.Count == 0)
+        {
+            StatusText = "Pipette: zuerst einen Clip mit Greenscreen-Effekt wählen (Reiter Effekte).";
+            return false;
+        }
+
+        const int w = 160, h = 90;
+        var rate = Project.Settings.FrameRate;
+        var frame = Math.Clamp(PlayheadFrame, clip.StartFrame, clip.EndFrame - 1);
+        var (path, seconds) = Core.Preview.PlaybackPlanner.SourceFileAt(clip, frame, rate);
+        var filter = Core.Export.FfmpegArgs.ColorFilter(clip) is { } color ? color + "," : string.Empty;
+        try
+        {
+            var raw = await _tools.Require().RunForBytesAsync(
+            [
+                "-v", "error", "-ss", Core.Export.FfmpegArgs.Seconds(seconds), "-i", path, "-frames:v", "1",
+                "-vf", $"{filter}scale={w}:{h},format=rgb24", "-f", "rawvideo", "-",
+            ]);
+            if (raw.Length < w * h * 3)
+            {
+                return false;
+            }
+
+            var (cx, cy) = ((int)Math.Clamp(u * w, 1, w - 2), (int)Math.Clamp(v * h, 1, h - 2));
+            int r = 0, g = 0, b = 0;
+            for (var dy = -1; dy <= 1; dy++)
+            {
+                for (var dx = -1; dx <= 1; dx++)
+                {
+                    var i = ((cy + dy) * w + cx + dx) * 3;
+                    r += raw[i];
+                    g += raw[i + 1];
+                    b += raw[i + 2];
+                }
+            }
+
+            effects.KeyColor = $"#{r / 9:X2}{g / 9:X2}{b / 9:X2}";
+            StatusText = $"Key-Farbe übernommen: {effects.KeyColor}";
+            return true;
+        }
+        catch (Exception ex) when (ex is Core.Media.FfmpegException or IOException or InvalidOperationException)
+        {
+            StatusText = "Pipette nicht möglich: " + ex.Message;
+            return false;
+        }
+    }
+
+    /// <summary>Umschalt+Klick ins Bild: Mitte der sichtbaren Maske (Farbe oder Effekt) dorthin setzen.</summary>
+    public bool MoveActiveMask(double u, double v, bool effectsTab)
+    {
+        if (effectsTab && SelectedClip?.Effects is { HasMask: true } fx)
+        {
+            fx.MaskCenterX = Math.Round(u, 3);
+            fx.MaskCenterY = Math.Round(v, 3);
+            return true;
+        }
+
+        if (!effectsTab && SelectedClip?.Color is { HasMask: true } color)
+        {
+            color.MaskCenterX = Math.Round(u, 3);
+            color.MaskCenterY = Math.Round(v, 3);
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task<bool> TrackMaskCoreAsync(Guid id, ColorMask mask, Action<TimelineClip, KeyframeTrack, KeyframeTrack> apply)
+    {
+        if (Project.FindClip(id) is not (_, { } clip) || clip.SourcePaths.Count == 0)
+        {
+            _dialogs.Error("Dieser Clip hat kein Bild zum Verfolgen.");
             return false;
         }
 
@@ -642,15 +816,7 @@ public sealed partial class MainViewModel : ObservableObject
             var centers = await Task.Run(() => ObjectTracker.Track(data, width, height, count, cx, cy,
                 Math.Max(0.05, mask.Width * 0.6), Math.Max(0.05, mask.Height * 0.6), searchRadius: 16));
             var (tx, ty) = ObjectTracker.ToKeyframes(centers, frameInClip);
-            var index = color.SelectedNodeIndex;
-            Editor.UpdateClip(id, "Maske verfolgen", c =>
-            {
-                if (c.Nodes[index].Mask is { } m)
-                {
-                    m.TrackX = tx;
-                    m.TrackY = ty;
-                }
-            });
+            Editor.UpdateClip(id, "Maske verfolgen", c => apply(c, tx, ty));
             StatusText = $"Maske folgt dem Objekt über {count} Bilder.";
             return true;
         }
@@ -683,6 +849,13 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Maske des gewählten Knotens am Abspielkopf (für die Umrisslinie im Programmmonitor).</summary>
+    /// <summary>Maske des gewählten Effekts am Abspielkopf (für den Umriss im Programmmonitor).</summary>
+    public (ColorMask Mask, long FrameInClip)? ActiveEffectMask =>
+        SelectedClip?.Effects is { Selected.Mask: { } mask } && SelectedClipId is { } id
+        && Project.FindClip(id) is (_, { } clip) && clip.Contains(PlayheadFrame)
+            ? (mask, PlayheadFrame - clip.StartFrame)
+            : null;
+
     public (ColorMask Mask, long FrameInClip)? ActiveMask =>
         SelectedClip?.Color is { IsNodeSelected: true, Mask: { } mask } && SelectedClipId is { } id
         && Project.FindClip(id) is (_, { } clip) && clip.Contains(PlayheadFrame)

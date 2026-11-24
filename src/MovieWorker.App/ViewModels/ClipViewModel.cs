@@ -22,6 +22,7 @@ public sealed partial class ClipViewModel : ObservableObject
         _editor = editor;
         ClipId = clipId;
         Color = new ColorViewModel(editor, clipId, lutFiles ?? (() => []));
+        Effects = new EffectsViewModel(editor, clipId);
         playhead ??= () => 0;
         setPlayhead ??= _ => { };
         Motion =
@@ -38,6 +39,9 @@ public sealed partial class ClipViewModel : ObservableObject
 
     /// <summary>Farbkorrektur (Reiter „Farbe“).</summary>
     public ColorViewModel Color { get; }
+
+    /// <summary>Effekte und Keying (Reiter „Effekte“).</summary>
+    public EffectsViewModel Effects { get; }
 
     /// <summary>Titelwerkzeug (nur bei Titel-Clips).</summary>
     public TitleViewModel? Title { get; }
@@ -328,6 +332,7 @@ public sealed partial class ClipViewModel : ObservableObject
         OnPropertyChanged(string.Empty);
         Title?.Refresh();
         Color.Refresh();
+        Effects.Refresh();
         RefreshMotion();
     }
 
