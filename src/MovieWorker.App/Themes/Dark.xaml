@@ -215,6 +215,24 @@
         <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}" />
     </Style>
 
+    <Style TargetType="{x:Type ListView}">
+        <Setter Property="Background" Value="{StaticResource Brush.Input}" />
+        <Setter Property="Foreground" Value="{StaticResource Brush.Text}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}" />
+    </Style>
+    <Style TargetType="{x:Type GridViewColumnHeader}">
+        <Setter Property="Foreground" Value="{StaticResource Brush.Text}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type GridViewColumnHeader}">
+                    <Border Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="0,0,1,1" Padding="6,3">
+                        <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Häkchen und Optionsfelder: Text hell -->
     <Style TargetType="{x:Type CheckBox}">
         <Setter Property="Foreground" Value="{StaticResource Brush.Text}" />
