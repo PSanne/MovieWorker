@@ -13,8 +13,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 5 | Ausgabe: Export-Dialog, Plattform-Vorlagen, Warteschlange (→ v0.5) | ✅ fertig |
 | 6 | Medien-Arbeitsbereich: Ordner, Metadaten, Bild-Ton-Synchronisation | ✅ fertig |
 | 7 | Schnellschnitt-Arbeitsbereich: Doppel-Timeline, Quellband, Einfügemodi | ✅ fertig |
-| 8 | Profi-Schnitt: Trimm-Modi, Keyframes, Geschwindigkeitsrampen, verschachtelte Clips | ⏳ als Nächstes |
-| 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | geplant |
+| 8 | Profi-Schnitt: Trimm-Modi, Keyframes, Geschwindigkeitsrampen, verschachtelte Clips | ✅ fertig |
+| 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | ⏳ als Nächstes |
 | 10 | Mehrspur, Multicam & Mischmodi | geplant |
 | 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | geplant |
 | 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | geplant |
@@ -78,9 +78,9 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Quellband: alle Aufnahmen hintereinander wie ein langes Band durchsehen
 - Einfügemodi: Einfügen (Insert), Überschreiben, Ersetzen, Anhängen, Oben platzieren
 
-## Sprint 8 – Profi-Schnitt
+## Sprint 8 – Profi-Schnitt ✅
 - Trimm-Modi: Ripple, Roll, Slip, Slide
-- Keyframes für Position, Zoom, Drehung, Deckkraft, Lautstärke
+- Keyframes für Position, Zoom, Drehung, Deckkraft, Lautstärke (weich, linear oder halten); Zoom unter 100 % fest (animiertes Verkleinern folgt mit Bild-in-Bild in Sprint 10)
 - Geschwindigkeitsrampen (fließende Zeitlupe)
 - Verschachtelte Clips (mehrere Clips zu einem zusammenfassen)
 

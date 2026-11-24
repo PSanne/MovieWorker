@@ -295,6 +295,7 @@ public sealed class TimelineEditor
             {
                 var cut = end - clip.StartFrame;
                 clip.SourceIn += rate.FramesToSeconds(cut) * clip.Speed;
+                clip.ShiftKeyframes(-cut);
                 clip.StartFrame = end;
                 clip.LengthFrames -= cut;
                 clip.FadeInFrames = Math.Min(clip.FadeInFrames, clip.LengthFrames);
@@ -311,6 +312,7 @@ public sealed class TimelineEditor
         right.LengthFrames = clip.EndFrame - frame;
         right.SourceIn = clip.SourceTimeAt(frame, rate);
         right.FadeInFrames = 0;
+        right.ShiftKeyframes(-(frame - clip.StartFrame));
         clip.LengthFrames = frame - clip.StartFrame;
         clip.FadeOutFrames = 0;
         return right;
@@ -339,6 +341,7 @@ public sealed class TimelineEditor
                 right.LengthFrames = clip.LengthFrames - leftLength;
                 right.SourceIn = clip.SourceTimeAt(frame, rate);
                 right.FadeInFrames = 0;
+                right.ShiftKeyframes(-leftLength);
                 clip.LengthFrames = leftLength;
                 clip.FadeOutFrames = 0;
                 track.Clips.Add(right);
@@ -427,6 +430,7 @@ public sealed class TimelineEditor
             clip.SourceIn = Math.Max(0, clip.SourceIn + rate.FramesToSeconds(delta) * clip.Speed);
             clip.StartFrame += delta;
             clip.LengthFrames -= delta;
+            clip.ShiftKeyframes(-delta);
             return true;
         });
     }
@@ -463,6 +467,171 @@ public sealed class TimelineEditor
     }
 
     /// <summary>
+    /// Ripple-Trimmen: Rand um <paramref name="delta"/> verschieben; alles dahinter rückt auf allen Spuren mit.
+    /// Am Anfang heißt positives delta „kürzer“ (der Clip bleibt stehen, der Rest rückt nach vorne).
+    /// </summary>
+    public bool RippleTrim(Guid clipId, bool atStart, long delta)
+    {
+        return Modify("Ripple-Trimmen", p =>
+        {
+            if (p.FindClip(clipId) is not ({ } track, { } clip))
+            {
+                return false;
+            }
+
+            var rate = p.Settings.FrameRate;
+            var oldEnd = clip.EndFrame;
+            long shift;
+            if (atStart)
+            {
+                var d = Math.Clamp(delta, -ClipHandles.Head(clip, rate), clip.LengthFrames - 1);
+                if (d == 0)
+                {
+                    return false;
+                }
+
+                clip.SourceIn = Math.Max(0, clip.SourceIn + rate.FramesToSeconds(d) * clip.Speed);
+                clip.LengthFrames -= d;
+                clip.ShiftKeyframes(-d);
+                shift = -d;
+            }
+            else
+            {
+                var d = Math.Clamp(delta, 1 - clip.LengthFrames, ClipHandles.Tail(clip, rate));
+                if (d == 0)
+                {
+                    return false;
+                }
+
+                clip.LengthFrames += d;
+                shift = d;
+            }
+
+            foreach (var other in p.AllClips.Where(c => c.Id != clip.Id && c.StartFrame >= oldEnd))
+            {
+                other.StartFrame += shift;
+            }
+
+            // Würde etwas auf einer anderen Spur überlappen, wird der Schritt verworfen.
+            return !p.Tracks.Any(HasOverlap);
+        });
+    }
+
+    /// <summary>
+    /// Roll: verschiebt den Schnitt zwischen <paramref name="leftClipId"/> und dem direkt anschließenden Clip um
+    /// <paramref name="delta"/> Bilder. Die Gesamtlänge bleibt gleich.
+    /// </summary>
+    public bool Roll(Guid leftClipId, long delta)
+    {
+        return Modify("Roll-Schnitt", p =>
+        {
+            if (p.FindClip(leftClipId) is not ({ } track, { } left))
+            {
+                return false;
+            }
+
+            var right = track.Clips.FirstOrDefault(c => c.StartFrame == left.EndFrame);
+            if (right is null)
+            {
+                return false;
+            }
+
+            var rate = p.Settings.FrameRate;
+            var d = Math.Clamp(delta,
+                Math.Max(1 - left.LengthFrames, -ClipHandles.Head(right, rate)),
+                Math.Min(right.LengthFrames - 1, ClipHandles.Tail(left, rate)));
+            if (d == 0)
+            {
+                return false;
+            }
+
+            left.LengthFrames += d;
+            right.StartFrame += d;
+            right.LengthFrames -= d;
+            right.SourceIn = Math.Max(0, right.SourceIn + rate.FramesToSeconds(d) * right.Speed);
+            right.ShiftKeyframes(-d);
+            return true;
+        });
+    }
+
+    /// <summary>Slip: zeigt einen früheren/späteren Ausschnitt der Quelle; Position und Länge bleiben.</summary>
+    public bool Slip(Guid clipId, long deltaFrames)
+    {
+        return Modify("Slip", p =>
+        {
+            if (p.FindClip(clipId) is not (_, { } clip))
+            {
+                return false;
+            }
+
+            var rate = p.Settings.FrameRate;
+            var d = Math.Clamp(deltaFrames, -ClipHandles.Head(clip, rate), ClipHandles.Tail(clip, rate));
+            if (d == 0)
+            {
+                return false;
+            }
+
+            clip.SourceIn = Math.Max(0, clip.SourceIn + rate.FramesToSeconds(d) * clip.Speed);
+            return true;
+        });
+    }
+
+    /// <summary>
+    /// Slide: verschiebt einen Clip zwischen zwei direkt anliegenden Nachbarn. Der linke Nachbar wird länger
+    /// bzw. kürzer, der rechte entsprechend kürzer bzw. länger – der Inhalt des Clips bleibt gleich.
+    /// </summary>
+    public bool Slide(Guid clipId, long delta)
+    {
+        return Modify("Slide", p =>
+        {
+            if (p.FindClip(clipId) is not ({ } track, { } clip))
+            {
+                return false;
+            }
+
+            var left = track.Clips.FirstOrDefault(c => c.EndFrame == clip.StartFrame);
+            var right = track.Clips.FirstOrDefault(c => c.StartFrame == clip.EndFrame);
+            if (left is null || right is null)
+            {
+                return false;
+            }
+
+            var rate = p.Settings.FrameRate;
+            var d = Math.Clamp(delta,
+                Math.Max(1 - left.LengthFrames, -ClipHandles.Head(right, rate)),
+                Math.Min(right.LengthFrames - 1, ClipHandles.Tail(left, rate)));
+            if (d == 0)
+            {
+                return false;
+            }
+
+            left.LengthFrames += d;
+            clip.StartFrame += d;
+            right.StartFrame += d;
+            right.LengthFrames -= d;
+            right.SourceIn = Math.Max(0, right.SourceIn + rate.FramesToSeconds(d) * right.Speed);
+            right.ShiftKeyframes(-d);
+            return true;
+        });
+    }
+
+    private static bool HasOverlap(TimelineTrack track)
+    {
+        long end = long.MinValue;
+        foreach (var clip in track.OrderedClips)
+        {
+            if (clip.StartFrame < end)
+            {
+                return true;
+            }
+
+            end = clip.EndFrame;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Zeitlupe: Spielt einen High-Frame-Rate-Clip Bild für Bild in der Projektbildrate ab
     /// (z. B. 119,88 fps in einem 23,976-Projekt = fünffach langsamer). Der Ton wird stummgeschaltet.
     /// </summary>
@@ -470,6 +639,169 @@ public sealed class TimelineEditor
     {
         var speed = Project.Settings.FrameRate.Value / sourceFrameRate;
         return SetSpeed(clipId, speed, "Als Zeitlupe konformieren");
+    }
+
+    /// <summary>
+    /// Fasst alles im Bereich [<paramref name="start"/>, <paramref name="end"/>) auf allen Spuren zu einem
+    /// verschachtelten Clip zusammen (Clips an den Grenzen werden geteilt). Liefert den neuen Clip.
+    /// </summary>
+    public TimelineClip? Nest(long start, long end, string name)
+    {
+        TimelineClip? result = null;
+        if (end <= start)
+        {
+            return null;
+        }
+
+        Modify("Verschachteln", p =>
+        {
+            var rate = p.Settings.FrameRate;
+            var inner = new List<TimelineTrack>();
+            foreach (var track in p.Tracks)
+            {
+                foreach (var boundary in new[] { start, end })
+                {
+                    foreach (var clip in track.Clips.Where(c => c.StartFrame < boundary && c.EndFrame > boundary).ToList())
+                    {
+                        track.Clips.Add(SplitClip(clip, boundary, rate));
+                    }
+                }
+
+                var inside = track.Clips.Where(c => c.StartFrame >= start && c.EndFrame <= end).ToList();
+                if (inside.Count == 0)
+                {
+                    continue;
+                }
+
+                track.Clips.RemoveAll(inside.Contains);
+                foreach (var clip in inside)
+                {
+                    clip.StartFrame -= start;
+                }
+
+                inner.Add(new TimelineTrack { Kind = track.Kind, Name = track.Name, Clips = inside });
+            }
+
+            if (inner.Count == 0)
+            {
+                return false;
+            }
+
+            var hasVideo = inner.Any(t => t.Kind == TrackKind.Video);
+            var nested = new TimelineClip
+            {
+                Name = name,
+                NestedTracks = inner,
+                SourceIn = 0,
+                SourceDuration = rate.FramesToSeconds(end - start),
+                StartFrame = start,
+                LengthFrames = end - start,
+                HasVideo = hasVideo,
+                HasAudio = inner.Any(t => t.Clips.Any(c => c.HasAudio)),
+            };
+            (hasVideo ? p.VideoTracks.First() : p.AudioTracks.First()).Clips.Add(nested);
+            result = nested;
+            return true;
+        });
+        return result;
+    }
+
+    /// <summary>Löst einen verschachtelten Clip wieder in seine Einzelclips auf.</summary>
+    public bool Unnest(Guid clipId) =>
+        Modify("Verschachtelung auflösen", p =>
+        {
+            if (p.FindClip(clipId) is not ({ } track, { IsNested: true } clip))
+            {
+                return false;
+            }
+
+            NestFlattener.Expand(p, track, clip);
+            return true;
+        });
+
+    /// <summary>
+    /// Geschwindigkeitsrampe: teilt den Clip in Abschnitte mit fließend wechselnder Geschwindigkeit
+    /// (z. B. 100 % → 25 %). Der Clip wird dadurch länger oder kürzer; Clips dahinter auf derselben Spur rücken mit.
+    /// </summary>
+    public bool ApplySpeedRamp(Guid clipId, SpeedRampShape shape, double slowSpeed, int steps = 6)
+    {
+        if (slowSpeed is <= 0.05 or >= 1)
+        {
+            return false;
+        }
+
+        return Modify("Geschwindigkeitsrampe", p =>
+        {
+            if (p.FindClip(clipId) is not ({ } track, { } clip) || clip.IsNested || Math.Abs(clip.Speed - 1) > 1e-6)
+            {
+                return false;
+            }
+
+            var rate = p.Settings.FrameRate;
+            var plan = new List<(double Fraction, double Speed)>();
+            void Ramp(double fraction, double from, double to)
+            {
+                for (var i = 0; i < steps; i++)
+                {
+                    var u = (i + 0.5) / steps;
+                    var eased = u * u * (3 - 2 * u);
+                    plan.Add((fraction / steps, from + (to - from) * eased));
+                }
+            }
+
+            switch (shape)
+            {
+                case SpeedRampShape.SlowDown:
+                    plan.Add((0.5, 1));
+                    Ramp(0.2, 1, slowSpeed);
+                    plan.Add((0.3, slowSpeed));
+                    break;
+                case SpeedRampShape.SpeedUp:
+                    plan.Add((0.3, slowSpeed));
+                    Ramp(0.2, slowSpeed, 1);
+                    plan.Add((0.5, 1));
+                    break;
+                default:
+                    plan.Add((0.25, 1));
+                    Ramp(0.1, 1, slowSpeed);
+                    plan.Add((0.3, slowSpeed));
+                    Ramp(0.1, slowSpeed, 1);
+                    plan.Add((0.25, 1));
+                    break;
+            }
+
+            var sourceLength = clip.SourceLength(rate);
+            var pieces = new List<TimelineClip>();
+            double used = 0;
+            var cursor = clip.StartFrame;
+            for (var i = 0; i < plan.Count; i++)
+            {
+                var (fraction, speed) = plan[i];
+                var piece = clip.Clone();
+                piece.Id = i == 0 ? clip.Id : Guid.NewGuid();
+                piece.SourceIn = clip.SourceIn + used * sourceLength;
+                piece.Speed = speed;
+                piece.LengthFrames = Math.Max(1, rate.SecondsToFrames(fraction * sourceLength / speed));
+                piece.StartFrame = cursor;
+                piece.Keyframes = [];
+                piece.FadeInFrames = i == 0 ? clip.FadeInFrames : 0;
+                piece.FadeOutFrames = i == plan.Count - 1 ? clip.FadeOutFrames : 0;
+                piece.AudioMuted = clip.AudioMuted || Math.Abs(speed - 1) > 1e-6;
+                cursor += piece.LengthFrames;
+                used += fraction;
+                pieces.Add(piece);
+            }
+
+            var delta = cursor - clip.EndFrame;
+            foreach (var other in track.Clips.Where(c => c.StartFrame >= clip.EndFrame))
+            {
+                other.StartFrame += delta;
+            }
+
+            track.Clips.Remove(clip);
+            track.Clips.AddRange(pieces);
+            return !HasOverlap(track);
+        });
     }
 
     /// <summary>Ändert die Geschwindigkeit; die Länge auf der Timeline passt sich an (Platz dahinter wird geprüft).</summary>
@@ -482,7 +814,7 @@ public sealed class TimelineEditor
 
         return Modify(description, p =>
         {
-            if (p.FindClip(clipId) is not ({ } track, { } clip))
+            if (p.FindClip(clipId) is not ({ } track, { } clip) || clip.IsNested)
             {
                 return false;
             }

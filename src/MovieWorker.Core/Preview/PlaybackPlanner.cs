@@ -28,7 +28,7 @@ public static class PlaybackPlanner
 {
     /// <summary>Das sichtbare Bild: der Clip der obersten Videospur an dieser Stelle.</summary>
     public static PlaybackSource? VideoAt(MovieProject project, long frame) =>
-        project.VideoTracks.Reverse()
+        NestFlattener.Flatten(project).VideoTracks.Reverse()
             .Where(t => !t.Muted)
             .Select(t => (Track: t, Clip: t.ClipAt(frame)))
             .Where(x => x.Clip is { HasVideo: true })
@@ -37,7 +37,7 @@ public static class PlaybackPlanner
 
     /// <summary>Alles, was an dieser Stelle zu hören ist (Kameraton von V1 und alle Tonspuren).</summary>
     public static IReadOnlyList<PlaybackSource> AudioAt(MovieProject project, long frame) =>
-        project.Tracks
+        NestFlattener.Flatten(project).Tracks
             .Select(t => (Track: t, Clip: t.ClipAt(frame)))
             .Where(x => x.Clip is { HasAudio: true })
             .Select(x => Source(project, x.Track, x.Clip!, frame))
@@ -52,6 +52,31 @@ public static class PlaybackPlanner
 
     /// <summary>Farbumrechnung für die Standbild-Vorschau (wie beim Export).</summary>
     public static string? PreviewColorFilter(TimelineClip clip) => FfmpegArgs.ColorFilter(clip);
+
+    /// <summary>
+    /// Kompletter Vorschau-Filter für ein Standbild: Farbumrechnung, auf Projektformat bringen und die
+    /// Bildlage (Zoom, Position, Drehung, Deckkraft) an dieser Stelle – wie im Export.
+    /// </summary>
+    public static string? PreviewFilter(MovieProject project, PlaybackSource source, long frame, int height)
+    {
+        var settings = project.Settings;
+        var width = Math.Max(2, (int)Math.Round(settings.Width * (double)height / settings.Height / 2) * 2);
+        var filters = new List<string>();
+        if (FfmpegArgs.ColorFilter(source.Clip) is { } color)
+        {
+            filters.Add(color);
+        }
+
+        if (!source.Clip.HasTransform)
+        {
+            return filters.Count == 0 ? null : string.Join(',', filters);
+        }
+
+        filters.Add($"scale={width}:{height}:force_original_aspect_ratio=decrease");
+        filters.Add($"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2");
+        filters.AddRange(TransformFilters.StaticAt(source.Clip, frame - source.Clip.StartFrame, width, height));
+        return string.Join(',', filters);
+    }
 
     private static PlaybackSource Source(MovieProject project, TimelineTrack track, TimelineClip clip, long frame)
     {

@@ -16,10 +16,55 @@ public sealed partial class ClipViewModel : ObservableObject
 {
     private readonly TimelineEditor _editor;
 
-    public ClipViewModel(TimelineEditor editor, Guid clipId)
+    public ClipViewModel(TimelineEditor editor, Guid clipId, Func<long>? playhead = null, Action<long>? setPlayhead = null)
     {
         _editor = editor;
         ClipId = clipId;
+        playhead ??= () => 0;
+        setPlayhead ??= _ => { };
+        Motion =
+        [
+            new(editor, clipId, AnimatedProperty.Scale, "Zoom", "%", 10, 400, 100, playhead, setPlayhead),
+            new(editor, clipId, AnimatedProperty.PositionX, "Position X", "%", -100, 100, 0, playhead, setPlayhead),
+            new(editor, clipId, AnimatedProperty.PositionY, "Position Y", "%", -100, 100, 0, playhead, setPlayhead),
+            new(editor, clipId, AnimatedProperty.Rotation, "Drehung", "°", -180, 180, 0, playhead, setPlayhead),
+            new(editor, clipId, AnimatedProperty.Opacity, "Deckkraft", "%", 0, 100, 100, playhead, setPlayhead),
+        ];
+        VolumeKeys = new(editor, clipId, AnimatedProperty.Volume, "Lautstärke", "dB", -60, 12, 0, playhead, setPlayhead);
+    }
+
+    /// <summary>Bewegung: Zoom, Position, Drehung, Deckkraft – je mit Keyframes.</summary>
+    public IReadOnlyList<AnimatedValueViewModel> Motion { get; }
+
+    /// <summary>Lautstärke mit Keyframes (Lautstärke-Hüllkurve).</summary>
+    public AnimatedValueViewModel VolumeKeys { get; }
+
+    public bool IsNested => Clip.IsNested;
+
+    public string NestedText => Clip.NestedTracks is { } tracks
+        ? $"Verschachtelter Clip mit {tracks.Count} Spur(en) und {tracks.Sum(t => t.Clips.Count)} Clips."
+        : string.Empty;
+
+    // ------------------------------------------------------------ Geschwindigkeitsrampe
+
+    public IReadOnlyList<string> RampShapes { get; } = ["Normal → Zeitlupe", "Zeitlupe → Normal", "Normal → Zeitlupe → Normal"];
+
+    public IReadOnlyList<string> RampSpeeds { get; } = ["25 %", "40 %", "50 %"];
+
+    [ObservableProperty]
+    private int _rampShape;
+
+    [ObservableProperty]
+    private int _rampSpeed;
+
+    [RelayCommand]
+    private void ApplyRamp()
+    {
+        var slow = RampSpeed switch { 1 => 0.4, 2 => 0.5, _ => 0.25 };
+        if (!_editor.ApplySpeedRamp(ClipId, (SpeedRampShape)RampShape, slow))
+        {
+            LastError = "Rampe nicht möglich: Der Clip muss mit normaler Geschwindigkeit laufen (und darf nicht verschachtelt sein).";
+        }
     }
 
     public Guid ClipId { get; }
@@ -121,5 +166,20 @@ public sealed partial class ClipViewModel : ObservableObject
     [ObservableProperty]
     private string? _lastError;
 
-    public void Refresh() => OnPropertyChanged(string.Empty);
+    public void Refresh()
+    {
+        OnPropertyChanged(string.Empty);
+        RefreshMotion();
+    }
+
+    /// <summary>Werte am Abspielkopf neu anzeigen (Keyframes).</summary>
+    public void RefreshMotion()
+    {
+        foreach (var value in Motion)
+        {
+            value.Refresh();
+        }
+
+        VolumeKeys.Refresh();
+    }
 }

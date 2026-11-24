@@ -39,6 +39,7 @@ public static class ExportBuilder
             totalFrames = project.DurationFrames;
         }
 
+        project = Timeline.NestFlattener.Flatten(project);
         var settings = project.Settings;
         var rate = settings.FrameRate;
         var (width, height) = CanvasSize(settings, preset);
@@ -92,6 +93,7 @@ public static class ExportBuilder
             vf.Add($"scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos");
             vf.Add($"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2");
             vf.Add("setsar=1");
+            vf.AddRange(TransformFilters.For(clip, width, height, rate));
             vf.Add($"trim=duration={durationText}");
             vf.Add($"tpad=stop_mode=clone:stop_duration={durationText}");
             vf.Add($"trim=duration={durationText}");
@@ -115,7 +117,7 @@ public static class ExportBuilder
             {
                 var audioIn = ConcatParts(graph, parts, "a", $"ca{segment}");
                 var af = new List<string> { "asetpts=PTS-STARTPTS", AudioFormat };
-                af.AddRange(VolumeAndFades(clip, rate, clip.VolumeDb + videoTrack.VolumeDb));
+                af.AddRange(VolumeAndFades(clip, rate, videoTrack.VolumeDb));
                 af.Add($"apad=whole_dur={durationText}");
                 af.Add($"atrim=duration={durationText}");
                 graph.Append(CultureInfo.InvariantCulture, $"{audioIn}{string.Join(',', af)}[a{segment}];");
@@ -155,7 +157,7 @@ public static class ExportBuilder
                 }
 
                 af.Add($"atrim=duration={duration}");
-                af.AddRange(VolumeAndFades(clip, rate, clip.VolumeDb + track.VolumeDb));
+                af.AddRange(VolumeAndFades(clip, rate, track.VolumeDb));
                 af.Add($"adelay=delays={delayMs}:all=1");
                 graph.Append(CultureInfo.InvariantCulture, $"{audioIn}{string.Join(',', af)}[t{audioClip}];");
                 mixLabels.Add($"[t{audioClip}]");
@@ -323,11 +325,11 @@ public static class ExportBuilder
         return $"[{label}]";
     }
 
-    private static IEnumerable<string> VolumeAndFades(TimelineClip clip, Time.FrameRate rate, double volumeDb)
+    private static IEnumerable<string> VolumeAndFades(TimelineClip clip, Time.FrameRate rate, double trackDb)
     {
-        if (Math.Abs(volumeDb) > 1e-6)
+        if (TransformFilters.Volume(clip, trackDb, rate) is { } volume)
         {
-            yield return $"volume={Number(volumeDb)}dB";
+            yield return volume;
         }
 
         if (clip.FadeInFrames > 0)

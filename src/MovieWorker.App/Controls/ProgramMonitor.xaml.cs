@@ -421,7 +421,7 @@ public partial class ProgramMonitor : UserControl
             var dpi = VisualTreeHelper.GetDpi(this).DpiScaleY;
             var height = (int)Math.Clamp(Screen.ActualHeight * dpi, 180, 1080);
             var image = await _vm.Thumbnails.RenderAsync(source.OriginalPath, source.OriginalSeconds, height,
-                PlaybackPlanner.PreviewColorFilter(source.Clip), token);
+                PlaybackPlanner.PreviewFilter(project, source, _vm.PlayheadFrame, height), token);
             if (token.IsCancellationRequested || (IsPlaying && !_stillMode))
             {
                 return false;

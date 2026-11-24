@@ -31,6 +31,7 @@ public static class ExportRange
                 var cutFront = clipStart - clip.StartFrame;
                 var cutBack = clip.EndFrame - clipEnd;
                 clip.SourceIn = clip.SourceTimeAt(clipStart, rate);
+                clip.ShiftKeyframes(-cutFront);
                 clip.StartFrame = clipStart - start;
                 clip.LengthFrames = clipEnd - clipStart;
                 clip.FadeInFrames = Math.Max(0, clip.FadeInFrames - cutFront);

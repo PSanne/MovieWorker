@@ -126,6 +126,82 @@ public sealed class TimelineClip
     /// <summary>Optionale Proxy-Datei für flüssige Vorschau (wird beim Export nicht verwendet).</summary>
     public string? ProxyPath { get; set; }
 
+    /// <summary>Feste Bildlage (Position, Zoom, Drehung, Deckkraft).</summary>
+    public ClipTransform Transform { get; set; } = new();
+
+    /// <summary>Keyframes je Eigenschaft (Bilder relativ zum Clipanfang).</summary>
+    public List<KeyframeTrack> Keyframes { get; set; } = [];
+
+    /// <summary>Verschachtelter Clip: enthält eigene Spuren (null = normaler Clip).</summary>
+    public List<TimelineTrack>? NestedTracks { get; set; }
+
+    [JsonIgnore]
+    public bool IsNested => NestedTracks is not null;
+
+    public KeyframeTrack? KeyframesFor(AnimatedProperty property) =>
+        Keyframes.FirstOrDefault(k => k.Property == property && k.Keys.Count > 0);
+
+    public bool IsAnimated(AnimatedProperty property) => KeyframesFor(property) is not null;
+
+    /// <summary>Wert einer Eigenschaft an einem Bild relativ zum Clipanfang (Keyframes, sonst fester Wert).</summary>
+    public double ValueAt(AnimatedProperty property, double frameInClip) =>
+        KeyframesFor(property) is { } track
+            ? track.ValueAt(frameInClip)
+            : property == AnimatedProperty.Volume ? VolumeDb : Transform.Get(property);
+
+    /// <summary>Setzt den Wert – mit Keyframes als Keyframe an dieser Stelle, sonst als festen Wert.</summary>
+    public void SetValue(AnimatedProperty property, double value, long frameInClip, bool addKeyframe)
+    {
+        var track = Keyframes.FirstOrDefault(k => k.Property == property);
+        if (addKeyframe || track is { Keys.Count: > 0 })
+        {
+            if (track is null)
+            {
+                track = new KeyframeTrack { Property = property };
+                Keyframes.Add(track);
+            }
+
+            var key = track.Keys.FirstOrDefault(k => k.Frame == frameInClip);
+            if (key is null)
+            {
+                track.Keys.Add(new Keyframe { Frame = frameInClip, Value = value });
+            }
+            else
+            {
+                key.Value = value;
+            }
+        }
+        else if (property == AnimatedProperty.Volume)
+        {
+            VolumeDb = value;
+        }
+        else
+        {
+            Transform.Set(property, value);
+        }
+    }
+
+    /// <summary>Verschiebt alle Keyframes (wenn sich der Clipanfang ändert, bleiben sie am selben Bildinhalt).</summary>
+    public void ShiftKeyframes(long delta)
+    {
+        if (delta == 0)
+        {
+            return;
+        }
+
+        foreach (var key in Keyframes.SelectMany(k => k.Keys))
+        {
+            key.Frame += delta;
+        }
+    }
+
+    /// <summary>Hat der Clip eine Bildlage, die beim Export berechnet werden muss?</summary>
+    [JsonIgnore]
+    public bool HasTransform =>
+        Keyframes.Any(k => k.Property != AnimatedProperty.Volume && k.Keys.Count > 0)
+        || Math.Abs(Transform.PositionX) > 1e-6 || Math.Abs(Transform.PositionY) > 1e-6
+        || Math.Abs(Transform.Scale - 100) > 1e-6 || Math.Abs(Transform.Rotation) > 1e-6 || Math.Abs(Transform.Opacity - 100) > 1e-6;
+
     [JsonIgnore]
     public long EndFrame => StartFrame + LengthFrames;
 
@@ -147,6 +223,9 @@ public sealed class TimelineClip
         var copy = (TimelineClip)MemberwiseClone();
         copy.SourcePaths = [.. SourcePaths];
         copy.PartDurations = [.. PartDurations];
+        copy.Transform = Transform.Clone();
+        copy.Keyframes = Keyframes.Select(k => k.Clone()).ToList();
+        copy.NestedTracks = NestedTracks?.Select(t => t.Clone()).ToList();
         return copy;
     }
 }

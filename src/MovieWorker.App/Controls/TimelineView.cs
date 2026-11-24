@@ -22,6 +22,12 @@ public sealed class ClipTrimEventArgs(Guid clipId, bool atStart, long delta) : E
     public long Delta { get; } = delta;
 }
 
+public sealed class ClipBodyEditEventArgs(Guid clipId, long delta) : EventArgs
+{
+    public Guid ClipId { get; } = clipId;
+    public long Delta { get; } = delta;
+}
+
 public sealed class MediaDropEventArgs(Guid mediaId, Guid? trackId, long frame) : EventArgs
 {
     public Guid MediaId { get; } = mediaId;
@@ -60,6 +66,9 @@ public sealed class TimelineView : FrameworkElement
         nameof(Compact), typeof(bool), typeof(TimelineView),
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.AffectsMeasure));
 
+    public static readonly DependencyProperty TrimModeProperty = DependencyProperty.Register(
+        nameof(TrimMode), typeof(TrimMode), typeof(TimelineView), new FrameworkPropertyMetadata(TrimMode.Normal));
+
     public static readonly DependencyProperty SnappingProperty = DependencyProperty.Register(
         nameof(Snapping), typeof(bool), typeof(TimelineView), new FrameworkPropertyMetadata(true));
 
@@ -72,6 +81,8 @@ public sealed class TimelineView : FrameworkElement
     private static readonly Brush DimTextBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x9A, 0x9C, 0xA3)));
     private static readonly Brush VideoClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x3B, 0x6F, 0xB6)));
     private static readonly Brush AudioClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x2F, 0x8F, 0x5B)));
+    private static readonly Brush NestedClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x7A, 0x55, 0xC2)));
+    private static readonly Brush KeyframeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xD2, 0x4A)));
     private static readonly Brush WaveBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xC0, 0xDD, 0xF5, 0xE6)));
     private static readonly Brush MarkBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x30, 0x7F, 0xB8, 0xFF)));
     private static readonly Brush MarkEdgeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x7F, 0xB8, 0xFF)));
@@ -114,11 +125,15 @@ public sealed class TimelineView : FrameworkElement
         TrimStart,
         TrimEnd,
         Pending,
+        BodyEdit,
     }
 
     public event EventHandler<ClipMoveEventArgs>? ClipMoveRequested;
 
     public event EventHandler<ClipTrimEventArgs>? ClipTrimRequested;
+
+    /// <summary>Slip bzw. Slide: Clip im entsprechenden Modus gezogen (Bilder nach rechts positiv).</summary>
+    public event EventHandler<ClipBodyEditEventArgs>? ClipBodyEditRequested;
 
     public event EventHandler<MediaDropEventArgs>? MediaDropped;
 
@@ -152,6 +167,13 @@ public sealed class TimelineView : FrameworkElement
     {
         get => (bool)GetValue(CompactProperty);
         set => SetValue(CompactProperty, value);
+    }
+
+    /// <summary>Normal, Ripple, Roll (Ränder ziehen) oder Slip, Slide (Clip ziehen).</summary>
+    public TrimMode TrimMode
+    {
+        get => (TrimMode)GetValue(TrimModeProperty);
+        set => SetValue(TrimModeProperty, value);
     }
 
     public bool Snapping
@@ -339,6 +361,18 @@ public sealed class TimelineView : FrameworkElement
             dc.DrawRectangle(null, GhostPen, ClipRect(dropRow, drop.Frame, drop.Length));
         }
 
+        if (_drag == DragMode.BodyEdit && _dragClip is { } edited)
+        {
+            var label = $"{(TrimMode == TrimMode.Slip ? "Slip" : "Slide")} {_trimDelta:+0;-0;0} Bilder";
+            var row = rows.FirstOrDefault(r => r.Track.Clips.Any(c => c.Id == edited.Id));
+            if (row.Track is not null)
+            {
+                var r = ClipRect(row, edited.StartFrame + (TrimMode == TrimMode.Slide ? _trimDelta : 0), edited.LengthFrames);
+                dc.DrawRectangle(null, GhostPen, r);
+                DrawText(dc, label, new Point(r.Left + 4, r.Bottom - 18), 11, TextBrush, dpi, 200, background: BadgeBrush);
+            }
+        }
+
         if (_snapLine is { } snap)
         {
             dc.DrawLine(SnapPen, new Point(X(snap), RulerHeight), new Point(X(snap), height));
@@ -384,7 +418,7 @@ public sealed class TimelineView : FrameworkElement
 
         var isVideo = row.Track.Kind == TrackKind.Video;
         dc.PushOpacity(ghostSource ? 0.35 : row.Track.Muted ? 0.45 : 1);
-        dc.DrawRoundedRectangle(isVideo ? VideoClipBrush : AudioClipBrush, ClipPen, rect, 3, 3);
+        dc.DrawRoundedRectangle(clip.IsNested ? NestedClipBrush : isVideo ? VideoClipBrush : AudioClipBrush, ClipPen, rect, 3, 3);
         dc.PushClip(new RectangleGeometry(rect));
 
         // Vorschaubild am Clipanfang
@@ -433,12 +467,37 @@ public sealed class TimelineView : FrameworkElement
                 background: Compact ? null : BadgeBrush);
         }
 
-        var badge = clip.ColorTransform switch
+        var badge = clip.IsNested ? "▣ verschachtelt" : clip.ColorTransform switch
         {
             ColorTransform.Lut => "LUT",
             ColorTransform.HdrToSdr => "HDR→SDR",
             _ => null,
         };
+
+        // Keyframes als kleine Rauten am unteren Rand
+        if (!Compact && clip.Keyframes.Count > 0)
+        {
+            foreach (var frame in clip.Keyframes.SelectMany(k => k.Keys).Select(k => k.Frame).Distinct())
+            {
+                var kx = X(start + frame);
+                if (kx < rect.Left || kx > rect.Right)
+                {
+                    continue;
+                }
+
+                var diamond = new StreamGeometry();
+                using (var g = diamond.Open())
+                {
+                    g.BeginFigure(new Point(kx, rect.Bottom - 10), true, true);
+                    g.LineTo(new Point(kx + 4, rect.Bottom - 6), true, false);
+                    g.LineTo(new Point(kx, rect.Bottom - 2), true, false);
+                    g.LineTo(new Point(kx - 4, rect.Bottom - 6), true, false);
+                }
+
+                diamond.Freeze();
+                dc.DrawGeometry(KeyframeBrush, null, diamond);
+            }
+        }
         if (badge is not null && rect.Width > 90 && !Compact)
         {
             DrawText(dc, badge, new Point(textLeft, rect.Top + 16), 9, TextBrush, dpi, 80, background: BadgeBrush);
@@ -685,9 +744,13 @@ public sealed class TimelineView : FrameworkElement
             case DragMode.Pending:
                 if (Math.Abs(p.X - _dragStartPoint.X) > 3 || Math.Abs(p.Y - _dragStartPoint.Y) > 3)
                 {
-                    _drag = DragMode.Move;
+                    _drag = TrimMode is TrimMode.Slip or TrimMode.Slide ? DragMode.BodyEdit : DragMode.Move;
                 }
 
+                return;
+            case DragMode.BodyEdit:
+                _trimDelta = FrameAt(p.X) - FrameAt(_dragStartPoint.X);
+                InvalidateVisual();
                 return;
             case DragMode.Move when _dragClip is { } clip:
             {
@@ -762,6 +825,11 @@ public sealed class TimelineView : FrameworkElement
             else if (mode is DragMode.TrimStart or DragMode.TrimEnd && _trimDelta != 0)
             {
                 ClipTrimRequested?.Invoke(this, new ClipTrimEventArgs(clip.Id, mode == DragMode.TrimStart, _trimDelta));
+            }
+            else if (mode == DragMode.BodyEdit && _trimDelta != 0)
+            {
+                // Slip: nach rechts ziehen zeigt früheres Material (der Inhalt wandert mit der Maus).
+                ClipBodyEditRequested?.Invoke(this, new ClipBodyEditEventArgs(clip.Id, TrimMode == TrimMode.Slip ? -_trimDelta : _trimDelta));
             }
         }
 

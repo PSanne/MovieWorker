@@ -233,13 +233,105 @@ public sealed partial class MainViewModel : ObservableObject
     public bool HasSelectedClip => SelectedClipId is not null && Project.FindClip(SelectedClipId.Value) is not null;
 
     partial void OnSelectedClipIdChanged(Guid? value) =>
-        SelectedClip = value is { } id && Project.FindClip(id) is not null ? new ClipViewModel(Editor, id) : null;
+        SelectedClip = value is { } id && Project.FindClip(id) is not null
+            ? new ClipViewModel(Editor, id, () => PlayheadFrame, frame => PlayheadFrame = frame)
+            : null;
 
     partial void OnPlayheadFrameChanged(long value)
     {
         if (value < 0)
         {
             PlayheadFrame = 0;
+            return;
+        }
+
+        SelectedClip?.RefreshMotion();
+    }
+
+    /// <summary>Wie Ziehen in der Timeline wirkt (Normal, Ripple, Roll, Slip, Slide).</summary>
+    [ObservableProperty]
+    private TrimMode _trimMode;
+
+    public IReadOnlyList<TrimMode> TrimModes { get; } = Enum.GetValues<TrimMode>();
+
+    /// <summary>Bearbeitung aus der Timeline im gewählten Trimm-Modus.</summary>
+    public void TrimEdit(TrimMode mode, Guid clipId, bool atStart, long delta)
+    {
+        var ok = mode switch
+        {
+            TrimMode.Ripple => Editor.RippleTrim(clipId, atStart, delta),
+            TrimMode.Roll => RollAt(clipId, atStart, delta),
+            TrimMode.Slip => Editor.Slip(clipId, delta),
+            TrimMode.Slide => Editor.Slide(clipId, delta),
+            _ => atStart ? Editor.TrimStart(clipId, delta) : Editor.TrimEnd(clipId, delta),
+        };
+        if (!ok)
+        {
+            StatusText = mode switch
+            {
+                TrimMode.Roll => "Roll braucht zwei direkt aneinanderliegende Clips (und Material dafür).",
+                TrimMode.Slide => "Slide braucht direkt anliegende Nachbarn links und rechts.",
+                TrimMode.Slip => "Slip: Die Aufnahme hat dafür kein Material mehr.",
+                _ => "Trimmen nicht möglich (Ende der Aufnahme oder Nachbarclip erreicht).",
+            };
+        }
+    }
+
+    private bool RollAt(Guid clipId, bool atStart, long delta)
+    {
+        if (!atStart)
+        {
+            return Editor.Roll(clipId, delta);
+        }
+
+        // Linker Rand eines Clips = rechter Rand seines linken Nachbarn.
+        if (Project.FindClip(clipId) is not ({ } track, { } clip))
+        {
+            return false;
+        }
+
+        var left = track.Clips.FirstOrDefault(c => c.EndFrame == clip.StartFrame);
+        return left is not null && Editor.Roll(left.Id, delta);
+    }
+
+    [RelayCommand]
+    public void Nest()
+    {
+        long start, end;
+        if (Project.HasRange)
+        {
+            (start, end) = (Project.MarkIn!.Value, Project.MarkOut!.Value);
+        }
+        else if (SelectedClipId is { } id && Project.FindClip(id) is ({ } _, { } clip))
+        {
+            (start, end) = (clip.StartFrame, clip.EndFrame);
+        }
+        else
+        {
+            _dialogs.Error("Zum Verschachteln bitte In/Out-Marken setzen oder einen Clip auswählen.");
+            return;
+        }
+
+        var name = _dialogs.Prompt("Name des verschachtelten Clips:", "Verschachteln", "Szene") ?? string.Empty;
+        if (name.Length == 0)
+        {
+            return;
+        }
+
+        if (Editor.Nest(start, end, name) is { } nested)
+        {
+            SelectedClipId = nested.Id;
+            StatusText = $"„{name}“ verschachtelt – Doppelklick in den Inspektor zeigt den Inhalt; „Verschachtelung auflösen“ macht es rückgängig.";
+        }
+    }
+
+    [RelayCommand]
+    public void Unnest()
+    {
+        if (SelectedClipId is { } id && Editor.Unnest(id))
+        {
+            SelectedClipId = null;
+            StatusText = "Verschachtelung aufgelöst.";
         }
     }
 
@@ -888,14 +980,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    public void TrimClip(Guid clipId, bool atStart, long delta)
-    {
-        var ok = atStart ? Editor.TrimStart(clipId, delta) : Editor.TrimEnd(clipId, delta);
-        if (!ok)
-        {
-            StatusText = "Trimmen nicht möglich (Ende der Aufnahme oder Nachbarclip erreicht).";
-        }
-    }
+    public void TrimClip(Guid clipId, bool atStart, long delta) => TrimEdit(TrimMode, clipId, atStart, delta);
 
     public void ToggleTrackMute(Guid trackId)
     {
@@ -1044,7 +1129,8 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             await _tools.Require().RunAsync(
-                Core.Export.FfmpegArgs.StillFrame(source.OriginalPath, source.OriginalSeconds, Core.Preview.PlaybackPlanner.PreviewColorFilter(source.Clip), path), 0);
+                Core.Export.FfmpegArgs.StillFrame(source.OriginalPath, source.OriginalSeconds,
+                    Core.Preview.PlaybackPlanner.PreviewFilter(Project, source, PlayheadFrame, Project.Settings.Height), path), 0);
             StatusText = $"Einzelbild gespeichert: {Path.GetFileName(path)}";
             return true;
         }

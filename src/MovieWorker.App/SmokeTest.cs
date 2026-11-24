@@ -347,6 +347,62 @@ public static class SmokeTest
         vm.ShowOverview = false;
         clipCount = vm.Project.AllClips.Count();
 
+        // ---- Profi-Schnitt (Sprint 8): Trimm-Modi, Keyframes, Rampe, Verschachteln
+        var left = vm.AddToTimeline(by70D!.Model, 1, 3);
+        var middle = vm.AddToTimeline(by70D.Model, 3.5, 4.5);
+        var right = vm.AddToTimeline(by70D.Model, 0.5, 1.5);
+        Core.Timeline.TimelineClip Live(Core.Timeline.TimelineClip clip) => vm.Project.FindClip(clip.Id)!.Value.Clip;
+        var r25 = vm.Project.Settings.FrameRate.NominalFps;
+        vm.TrimMode = TrimMode.Roll;
+        vm.TrimClip(left.Id, atStart: false, 5);
+        c.Check(Live(left).LengthFrames == 2 * r25 + 5 && Live(middle).StartFrame == Live(left).EndFrame, "Roll-Schnitt");
+        vm.TrimMode = TrimMode.Slip;
+        var middleSource = Live(middle).SourceIn;
+        vm.TrimEdit(TrimMode.Slip, middle.Id, false, 10);
+        c.Check(Live(middle).SourceIn > middleSource && Live(middle).StartFrame == Live(left).EndFrame, "Slip");
+        vm.TrimEdit(TrimMode.Slide, middle.Id, false, 3);
+        c.Check(Live(middle).StartFrame == Live(left).EndFrame && Live(right).StartFrame == Live(middle).EndFrame, "Slide");
+        var rightBefore = Live(right).StartFrame;
+        vm.TrimMode = TrimMode.Ripple;
+        vm.TrimClip(middle.Id, atStart: false, -5);
+        c.Check(Live(right).StartFrame == rightBefore - 5 && Live(right).StartFrame == Live(middle).EndFrame, "Ripple-Trimmen");
+        vm.TrimMode = TrimMode.Normal;
+
+        vm.SelectedClipId = left.Id;
+        vm.PlayheadFrame = Live(left).StartFrame;
+        var zoom = vm.SelectedClip!.Motion.First(m => m.Property == Core.Timeline.AnimatedProperty.Scale);
+        zoom.ToggleKeyCommand.Execute(null);
+        vm.PlayheadFrame = Live(left).EndFrame - 1;
+        zoom.Value = 140;
+        c.Check(Live(left).KeyframesFor(Core.Timeline.AnimatedProperty.Scale)?.Keys.Count == 2, "Zoom-Keyframes (Ken Burns)");
+        vm.PlayheadFrame = Live(left).StartFrame + 10;
+        c.Check(await program.RenderStillNowAsync(), "Standbild mit Keyframe-Zoom");
+        var vol = vm.SelectedClip.VolumeKeys;
+        vol.ToggleKeyCommand.Execute(null);
+        c.Check(Live(left).IsAnimated(Core.Timeline.AnimatedProperty.Volume), "Lautstärke-Keyframe");
+
+        vm.SelectedClipId = right.Id;
+        vm.SelectedClip!.RampShape = 0;
+        vm.SelectedClip.ApplyRampCommand.Execute(null);
+        c.Check(vm.Project.VideoTracks.First().Clips.Count(cl => cl.SourcePaths.SequenceEqual(right.SourcePaths) && cl.Speed < 1) >= 3,
+            "Geschwindigkeitsrampe");
+
+        vm.Editor.SetMarks(Live(left).StartFrame, Live(middle).EndFrame);
+        dialogs.Answers.Enqueue("Szene A");
+        vm.Nest();
+        var nestedClip = vm.Project.AllClips.FirstOrDefault(cl => cl.IsNested);
+        c.Check(nestedClip is not null && nestedClip.Name == "Szene A", "Verschachteln");
+        vm.PlayheadFrame = nestedClip!.StartFrame + 5;
+        c.Check(await program.RenderStillNowAsync(), "Vorschau zeigt Inhalt des verschachtelten Clips");
+        var nestJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("web-h264-1080")!, Path.Combine(exportFolder, "verschachtelt.mp4"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(nestJob.State == ExportJobState.Done, "Export mit Keyframes und Verschachtelung: " + nestJob.Detail);
+        vm.SelectedClipId = nestedClip.Id;
+        vm.Unnest();
+        c.Check(!vm.Project.AllClips.Any(cl => cl.IsNested), "Verschachtelung aufgelöst");
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "profischnitt.png"));
+        clipCount = vm.Project.AllClips.Count();
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");

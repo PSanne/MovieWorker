@@ -33,6 +33,7 @@ public partial class MainWindow : Window
         Timeline.WaveformProvider = WaveformFor;
         Timeline.ClipMoveRequested += (_, e) => _viewModel.MoveClip(e.ClipId, e.NewStart, e.TrackId);
         Timeline.ClipTrimRequested += (_, e) => _viewModel.TrimClip(e.ClipId, e.AtStart, e.Delta);
+        Timeline.ClipBodyEditRequested += (_, e) => _viewModel.TrimEdit(_viewModel.TrimMode, e.ClipId, false, e.Delta);
         Timeline.MediaDropped += (_, e) => _viewModel.InsertMediaAt(e.MediaId, e.TrackId, e.Frame);
         Timeline.TrackMuteToggled += (_, id) => _viewModel.ToggleTrackMute(id);
         Timeline.ClipDoubleClicked += (_, _) => ClipTab.IsSelected = true;
@@ -176,6 +177,21 @@ public partial class MainWindow : Window
                 break;
             case Key.X when ctrl && shift:
                 _viewModel.ClearMarks();
+                break;
+            case Key.A when !ctrl && !shift:
+                _viewModel.TrimMode = TrimMode.Normal;
+                break;
+            case Key.B when !ctrl && !shift:
+                _viewModel.TrimMode = TrimMode.Ripple;
+                break;
+            case Key.R when !ctrl && !shift:
+                _viewModel.TrimMode = TrimMode.Roll;
+                break;
+            case Key.Y when !ctrl && !shift:
+                _viewModel.TrimMode = TrimMode.Slip;
+                break;
+            case Key.U when !ctrl && !shift:
+                _viewModel.TrimMode = TrimMode.Slide;
                 break;
             case Key.N when !ctrl:
                 _viewModel.Snapping = !_viewModel.Snapping;
