@@ -50,6 +50,27 @@ public static class PlaybackPlanner
             .DefaultIfEmpty(Math.Max(frame + 1, project.DurationFrames))
             .Min();
 
+    /// <summary>Datei und Zeit darin für ein Timeline-Bild eines Clips (berücksichtigt geteilte Aufnahmen).</summary>
+    public static (string Path, double Seconds) SourceFileAt(TimelineClip clip, long frame, Time.FrameRate rate)
+    {
+        var seconds = clip.SourceTimeAt(frame, rate);
+        if (clip.SourcePaths.Count > 1 && clip.PartDurations.Count == clip.SourcePaths.Count)
+        {
+            double start = 0;
+            for (var i = 0; i < clip.SourcePaths.Count; i++)
+            {
+                if (seconds < start + clip.PartDurations[i] || i == clip.SourcePaths.Count - 1)
+                {
+                    return (clip.SourcePaths[i], seconds - start);
+                }
+
+                start += clip.PartDurations[i];
+            }
+        }
+
+        return (clip.PrimaryPath, seconds);
+    }
+
     /// <summary>Farbumrechnung für die Standbild-Vorschau (wie beim Export).</summary>
     public static string? PreviewColorFilter(TimelineClip clip) => FfmpegArgs.ColorFilter(clip);
 

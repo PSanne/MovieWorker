@@ -113,6 +113,16 @@ public static class ExportBuilder
             vf.Add($"scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos");
             vf.Add($"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2");
             vf.Add("setsar=1");
+
+            // Korrekturknoten (mit Masken) brauchen eigene Zweige im Filtergraph.
+            if (clip.Nodes.Any(n => n.Enabled && !n.Grade.IsNeutral))
+            {
+                var preLabel = $"[pre{segment}]";
+                graph.Append(CultureInfo.InvariantCulture, $"{videoIn}{string.Join(',', vf)}{preLabel};");
+                videoIn = ApplyNodes(graph, preLabel, clip, width, height, rate, pixelFormat, $"n{segment}");
+                vf.Clear();
+            }
+
             vf.AddRange(TransformFilters.For(clip, width, height, rate));
             vf.Add($"trim=duration={durationText}");
             vf.Add($"tpad=stop_mode=clone:stop_duration={durationText}");
@@ -306,6 +316,12 @@ public static class ExportBuilder
             vf.Add(color);
         }
 
+        // Korrekturknoten bei oberen Spuren: ohne Maske (Masken gelten auf der Hauptspur)
+        foreach (var node in clip.Nodes.Where(n => n.Enabled && !n.Grade.IsNeutral))
+        {
+            vf.Add($"lut3d=file={FfmpegArgs.EscapeFilterPath(Color.GradeLutCache.Ensure(node.Grade))}:interp=tetrahedral");
+        }
+
         vf.Add($"fps={rate.ToFfmpeg()}");
         var t = clip.Transform;
         var output = $"[comp{layer}]";
@@ -376,6 +392,50 @@ public static class ExportBuilder
     }
 
     private static int Even(double value) => Math.Max(2, (int)Math.Round(value / 2) * 2);
+
+    /// <summary>
+    /// Korrekturknoten nacheinander: ohne Maske als LUT in der Kette, mit Maske über einen Zweig
+    /// (korrigiertes Bild + weiche Maske als Alphakanal über das Original gelegt). Liefert das Ausgangslabel.
+    /// </summary>
+    private static string ApplyNodes(StringBuilder graph, string input, TimelineClip clip, int width, int height, Time.FrameRate rate,
+        string pixelFormat, string id)
+    {
+        var current = input;
+        var pending = new List<string>();
+        var k = 0;
+        foreach (var node in clip.Nodes.Where(n => n.Enabled && !n.Grade.IsNeutral))
+        {
+            var lut = $"lut3d=file={FfmpegArgs.EscapeFilterPath(Color.GradeLutCache.Ensure(node.Grade))}:interp=tetrahedral";
+            if (node.Mask is not { } mask)
+            {
+                pending.Add(lut);
+                continue;
+            }
+
+            var flushed = $"[{id}f{k}]";
+            graph.Append(CultureInfo.InvariantCulture, $"{current}{(pending.Count == 0 ? "null" : string.Join(',', pending))}{flushed};");
+            pending.Clear();
+            var (mw, mh) = (Math.Max(2, width / 4 / 2 * 2), Math.Max(2, height / 4 / 2 * 2));
+            graph.Append(CultureInfo.InvariantCulture, $"{flushed}split=3[{id}b{k}][{id}g{k}][{id}m{k}];");
+            graph.Append(CultureInfo.InvariantCulture, $"[{id}g{k}]{lut},format=yuva444p[{id}gl{k}];");
+            graph.Append(CultureInfo.InvariantCulture,
+                $"[{id}m{k}]scale={mw}:{mh},format=gray,geq=lum='255*({mask.ToExpression(rate)})',scale={width}:{height}:flags=bilinear[{id}mk{k}];");
+            graph.Append(CultureInfo.InvariantCulture, $"[{id}gl{k}][{id}mk{k}]alphamerge[{id}ga{k}];");
+            var merged = $"[{id}o{k}]";
+            graph.Append(CultureInfo.InvariantCulture, $"[{id}b{k}][{id}ga{k}]overlay=format=auto,format={pixelFormat}{merged};");
+            current = merged;
+            k++;
+        }
+
+        if (pending.Count > 0 || current == input)
+        {
+            var output = $"[{id}end]";
+            graph.Append(CultureInfo.InvariantCulture, $"{current}{(pending.Count == 0 ? "null" : string.Join(',', pending))}{output};");
+            current = output;
+        }
+
+        return current;
+    }
 
     /// <summary>
     /// Fügt die Abschnitte der Hauptspur zusammen: ohne Übergang per <c>concat</c>, mit Übergang per

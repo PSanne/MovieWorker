@@ -7,8 +7,8 @@ Es ist auf Material der **Canon EOS R6 Mark II** und der **Canon EOS 70D** zuges
 professionelle Videos machen: vom Import der Speicherkarte über den Schnitt bis zum Export als
 H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 
-> **Stand: Sprint 11 von 16 abgeschlossen** – Import, Medien-Arbeitsbereich, Schnellschnitt, Profi-Schnitt, Übergänge & Titel,
-> Mehrspur & Multicam, Farbkorrektur, Export. Als Nächstes: Farbe II, Ton, Effekte, Version 1.0. Die erste voll nutzbare Version: importieren, schneiden,
+> **Stand: Sprint 12 von 16 abgeschlossen** – Import, Medien-Arbeitsbereich, Schnellschnitt, Profi-Schnitt, Übergänge & Titel,
+> Mehrspur & Multicam, Farbkorrektur mit Knoten und Masken, Export. Als Nächstes: Ton, Effekte, Version 1.0. Die erste voll nutzbare Version: importieren, schneiden,
 > abspielen und für YouTube, Instagram/TikTok oder als Master exportieren. Den kompletten Plan findest du in
 > **[docs/SPRINTS.md](docs/SPRINTS.md)**.
 
@@ -41,6 +41,7 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | **Mehrspur** | Beliebig viele Videospuren: obere Spuren liegen **über** dem Bild darunter – Bild-in-Bild (Größe, Lage, Ecken-Vorlagen), Deckkraft (auch per Keyframe), Drehung, **Zuschneiden** und **Spiegeln**; Ton der oberen Clips wird mitgemischt · **Mischmodi**: Multiplizieren, Negativ multiplizieren, Überlagern, Weiches Licht, Abdunkeln, Aufhellen, Differenz, Addieren |
 | **Multicam** | Kameraaufnahmen im Medienpool markieren (Strg+Klick) → *Multicam*: MovieWorker synchronisiert R6 Mark II und 70D per Ton und legt einen Mehrkamera-Clip an · **Kamerawechsel mit 1, 2, 3 …** am Abspielkopf – auch live während der Wiedergabe · Bild- und Ton-Kamera getrennt wählbar (z. B. Bild von der 70D, Ton durchgehend von der R6) |
 | **Farbe** | Reiter *Farbe*: **Eingang** – LUT aus der LUT-Bibliothek (z. B. die offizielle Canon-LUT *Canon Log 3 → BT.709*, wird beim Festlegen des LUT-Ordners automatisch als Standard für Log-Clips erkannt) oder HDR → SDR mit wählbarem Tone-Mapping · **Grundkorrektur**: Belichtung, Kontrast, Sättigung, Temperatur, Tönung · **Farbräder** Lift/Gamma/Gain (Punkt ziehen, Umschalt = fein, Doppelklick = zurück) · **Kopieren/Einfügen**, *Auf Kamera übertragen* · **Farbabgleich**: R6-Clip als Referenz, 70D-Clip daran angleichen · **Messinstrumente**: Waveform, RGB-Parade, Vektorskop (mit Hautton-Linie), Histogramm · Export **HDR10** (H.265, PQ, BT.2020) |
+| **Farbe II** | **Kurven** (Helligkeit, Rot, Grün, Blau – Klick setzt Punkt, Doppelklick löscht) · **Sekundäre Korrektur**: Farbbereich nach Farbton, Sättigung und Helligkeit auswählen (*Auswahl anzeigen* zeigt ihn weiß) und nur ihn ändern – z. B. Himmel blauer, Haut wärmer · **Korrekturknoten** nacheinander, je mit eigener Korrektur und optionaler **Maske** (Ellipse/Rechteck, weiche Kante, umkehrbar – fertige *Vignette*) · **Tracking**: *Verfolgen ▶* lässt die Maske einem Objekt folgen · Masken-Umriss im Programmmonitor |
 | **Exakte Vorschau** | Im Stillstand rechnet der Programmmonitor das Bild über **dieselbe Kette wie der Export** – alle Spuren, Bild-in-Bild, Mischmodi, Titel, Farbe, Keyframes |
 | **Clip-Inspektor** | Position und Länge als Timecode · Geschwindigkeit (Zeitlupe/Zeitraffer) · „Als Zeitlupe abspielen“ für 150/180-fps-Clips · Lautstärke, Ton stumm, Ein-/Ausblenden |
 | **Monitore** | *Quelle*: Aufnahme ansehen, In/Out setzen, Ausschnitt ans Ende oder am Abspielkopf einfügen · *Programm*: Timeline abspielen; im Stillstand exaktes Standbild mit LUT/HDR-Umrechnung wie im Export · J/K/L-Shuttle |

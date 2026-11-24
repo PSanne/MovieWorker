@@ -101,6 +101,12 @@ public sealed class ColorGrade
 
     public double MatchOffsetB { get; set; }
 
+    /// <summary>Gradationskurven (Luma, Rot, Grün, Blau).</summary>
+    public ColorCurves Curves { get; set; } = new();
+
+    /// <summary>Sekundäre Korrektur (Farbbereich gezielt ändern).</summary>
+    public SecondaryCorrection Secondary { get; set; } = new();
+
     /// <summary>Tone-Mapping für HDR-Clips (PQ/HLG) beim SDR-Export.</summary>
     public ToneMapping ToneMap { get; set; } = ToneMapping.Hable;
 
@@ -110,6 +116,8 @@ public sealed class ColorGrade
         copy.Lift = Lift.Clone();
         copy.Gamma = Gamma.Clone();
         copy.Gain = Gain.Clone();
+        copy.Curves = Curves.Clone();
+        copy.Secondary = Secondary.Clone();
         return copy;
     }
 
@@ -117,7 +125,8 @@ public sealed class ColorGrade
         Math.Abs(Exposure) < 1e-6 && Math.Abs(Contrast) < 1e-6 && Math.Abs(Saturation - 100) < 1e-6
         && Math.Abs(Temperature) < 1e-6 && Math.Abs(Tint) < 1e-6 && Lift.IsNeutral && Gamma.IsNeutral && Gain.IsNeutral
         && Math.Abs(MatchGainR - 1) < 1e-6 && Math.Abs(MatchGainG - 1) < 1e-6 && Math.Abs(MatchGainB - 1) < 1e-6
-        && Math.Abs(MatchOffsetR) < 1e-6 && Math.Abs(MatchOffsetG) < 1e-6 && Math.Abs(MatchOffsetB) < 1e-6;
+        && Math.Abs(MatchOffsetR) < 1e-6 && Math.Abs(MatchOffsetG) < 1e-6 && Math.Abs(MatchOffsetB) < 1e-6
+        && Curves.IsIdentity && !Secondary.Enabled;
 
     /// <summary>Wendet die Korrektur auf eine Farbe (0…1) an.</summary>
     public (double R, double G, double B) Apply(double r, double g, double b)
@@ -154,9 +163,13 @@ public sealed class ColorGrade
         // 6. Sättigung (Rec.709-Luma)
         var s = Saturation / 100;
         var y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        r = y + (r - y) * s;
-        g = y + (g - y) * s;
-        b = y + (b - y) * s;
+        r = Math.Clamp(y + (r - y) * s, 0, 1);
+        g = Math.Clamp(y + (g - y) * s, 0, 1);
+        b = Math.Clamp(y + (b - y) * s, 0, 1);
+
+        // 7. Kurven, 8. Sekundäre Korrektur
+        (r, g, b) = Curves.Apply(r, g, b);
+        (r, g, b) = Secondary.Apply(r, g, b);
         return (Math.Clamp(r, 0, 1), Math.Clamp(g, 0, 1), Math.Clamp(b, 0, 1));
     }
 
@@ -169,17 +182,11 @@ public sealed class ColorGrade
         return Math.Pow(Math.Max(0, v), 1 / gamma);
     }
 
-    /// <summary>Kurzer, stabiler Schlüssel für den LUT-Zwischenspeicher.</summary>
+    /// <summary>Kurzer, stabiler Schlüssel für den LUT-Zwischenspeicher (aus allen Einstellungen).</summary>
     public string Hash()
     {
-        string N(double v) => v.ToString("0.#####", CultureInfo.InvariantCulture);
-        var text = string.Join('|', new[]
-        {
-            Exposure, Contrast, Saturation, Temperature, Tint,
-            Lift.R, Lift.G, Lift.B, Lift.Master, Gamma.R, Gamma.G, Gamma.B, Gamma.Master, Gain.R, Gain.G, Gain.B, Gain.Master,
-            MatchGainR, MatchGainG, MatchGainB, MatchOffsetR, MatchOffsetG, MatchOffsetB,
-        }.Select(N));
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16];
+        var json = System.Text.Json.JsonSerializer.Serialize(this);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("v2" + json)))[..16];
     }
 }
 

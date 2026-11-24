@@ -23,6 +23,7 @@
                           MediaOpened="OnMediaOpened" MediaFailed="OnMediaFailed" Visibility="Hidden" />
             <Image x:Name="Still" Stretch="Uniform" />
             <Canvas x:Name="TitleOverlay" IsHitTestVisible="False" ClipToBounds="True" />
+            <Canvas x:Name="MaskOverlay" IsHitTestVisible="False" ClipToBounds="True" />
             <TextBlock x:Name="Message" Foreground="#888" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
                        Text="Die Timeline ist leer." />
         </Grid>

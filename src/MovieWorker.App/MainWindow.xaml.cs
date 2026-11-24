@@ -44,6 +44,13 @@ public partial class MainWindow : Window
         OverviewTimeline.SizeChanged += (_, _) => OverviewTimeline.ZoomToFit();
         Loaded += (_, _) => SyncScrollBar();
         SourceMonitor.Attach(viewModel);
+        Inspector.SelectionChanged += (_, e) =>
+        {
+            if (e.OriginalSource == Inspector)
+            {
+                UpdateMaskOutline();
+            }
+        };
         ProgramMonitor.StillRendered += (_, _) =>
         {
             if (ColorTab.IsSelected)
@@ -239,8 +246,21 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------------ Timeline
 
+    private void UpdateMaskOutline()
+    {
+        if (ColorTab.IsSelected && _viewModel.ActiveMask is { } active)
+        {
+            ProgramMonitor.ShowMask(active.Mask, active.FrameInClip);
+        }
+        else
+        {
+            ProgramMonitor.ShowMask(null, 0);
+        }
+    }
+
     private void OnProjectChanged()
     {
+        UpdateMaskOutline();
         Timeline.InvalidateMeasure();
         Timeline.InvalidateVisual();
         OverviewTimeline.InvalidateMeasure();
@@ -387,9 +407,18 @@ public partial class MainWindow : Window
                     ClipTab.IsSelected = true;
                 }
 
+                _viewModel.SelectedClip.Color.PropertyChanged += (_, args) =>
+                {
+                    if (args.PropertyName is nameof(ColorViewModel.SelectedNodeIndex) or "")
+                    {
+                        UpdateMaskOutline();
+                    }
+                };
+                UpdateMaskOutline();
                 break;
             case nameof(MainViewModel.PlayheadFrame):
                 Timeline.FollowPlayhead();
+                UpdateMaskOutline();
                 break;
             case nameof(MainViewModel.SourceTapeMode):
                 SourceMonitor.SetTapeMode(_viewModel.SourceTapeMode);

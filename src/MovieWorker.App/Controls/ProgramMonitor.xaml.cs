@@ -542,6 +542,40 @@ public partial class ProgramMonitor : UserControl
         }
     }
 
+    /// <summary>Zeigt den Umriss einer Farbmaske (gestrichelt) über dem Bild – oder blendet ihn aus.</summary>
+    public void ShowMask(MovieWorker.Core.Color.ColorMask? mask, long frameInClip)
+    {
+        MaskOverlay.Children.Clear();
+        if (mask is null || _vm is null)
+        {
+            return;
+        }
+
+        var settings = _vm.Project.Settings;
+        var aspect = (double)settings.Width / settings.Height;
+        var (w, h) = (Screen.ActualWidth, Screen.ActualHeight);
+        if (w <= 0 || h <= 0)
+        {
+            return;
+        }
+
+        var (vw, vh) = w / h > aspect ? (h * aspect, h) : (w, w / aspect);
+        var left = (w - vw) / 2;
+        var top = (h - vh) / 2;
+        var (cx, cy) = mask.CenterAt(frameInClip);
+        System.Windows.Shapes.Shape shape = mask.Shape == MovieWorker.Core.Color.MaskShape.Ellipse
+            ? new System.Windows.Shapes.Ellipse()
+            : new System.Windows.Shapes.Rectangle();
+        shape.Width = Math.Max(2, mask.Width * vw);
+        shape.Height = Math.Max(2, mask.Height * vh);
+        shape.Stroke = Brushes.Yellow;
+        shape.StrokeThickness = 1.5;
+        shape.StrokeDashArray = [4, 3];
+        Canvas.SetLeft(shape, left + cx * vw - shape.Width / 2);
+        Canvas.SetTop(shape, top + cy * vh - shape.Height / 2);
+        MaskOverlay.Children.Add(shape);
+    }
+
     private static Brush ToBrush(string color, Brush fallback, double opacity = 1)
     {
         try

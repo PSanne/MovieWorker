@@ -529,6 +529,36 @@ public static class SmokeTest
         SaveScreenshot(window, Path.Combine(c.OutputFolder, "farbe.png"));
         clipCount = vm.Project.AllClips.Count();
 
+        // ---- Farbe II (Sprint 12): Kurven, Sekundär, Knoten, Masken, Tracking
+        vm.SelectedClipId = eosClip.Id;
+        var col = vm.SelectedClip!.Color;
+        col.SelectedCurveChannel = ColorViewModel.CurveChannels[0];
+        col.CurvePoints = [new MovieWorker.Core.Color.CurvePoint { X = 0.25, Y = 0.2 }, new MovieWorker.Core.Color.CurvePoint { X = 0.75, Y = 0.8 }];
+        col.SecondaryEnabled = true;
+        col.HueCenter = 120;
+        col.SecondarySaturation = 150;
+        var g0 = vm.Project.FindClip(eosClip.Id)!.Value.Clip.Grade;
+        c.Check(g0.Curves.Luma.Count == 2 && g0.Secondary.Enabled && Math.Abs(g0.Secondary.HueCenter - 120) < 0.5, "Kurve und sekundäre Korrektur");
+        vm.AddColorNodeCommand.Execute("Ellipse");
+        col = vm.SelectedClip!.Color;
+        c.Check(col.IsNodeSelected && col.HasMask, "Knoten mit Ellipsen-Maske");
+        col.Exposure = 0.6;
+        col.MaskCenterX = 0.4;
+        var nodeClip = vm.Project.FindClip(eosClip.Id)!.Value.Clip;
+        c.Check(Math.Abs(nodeClip.Nodes[0].Grade.Exposure - 0.6) < 1e-6 && Math.Abs(nodeClip.Grade.Exposure) < 1e-6, "Korrektur wirkt nur im Knoten");
+        vm.PlayheadFrame = nodeClip.StartFrame + 2;
+        c.Check(await vm.TrackMaskAsync() && vm.SelectedClip!.Color.IsTracked, "Maske verfolgt: " + vm.StatusText);
+        vm.AddColorNodeCommand.Execute("Vignette");
+        c.Check(vm.Project.FindClip(eosClip.Id)!.Value.Clip.Nodes.Count == 2, "Vignette als zweiter Knoten");
+        vm.PlayheadFrame = nodeClip.StartFrame + 5;
+        c.Check(await program.RenderStillNowAsync(), "Vorschau mit Knoten und Masken " + program.MessageText);
+        vm.Editor.SetMarks(nodeClip.StartFrame, nodeClip.StartFrame + 25);
+        var nodeJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("web-h264-1080")!, Path.Combine(exportFolder, "knoten.mp4"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(nodeJob.State == ExportJobState.Done, "Export mit Knoten, Masken und Tracking: " + nodeJob.Detail);
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "farbe2.png"));
+        clipCount = vm.Project.AllClips.Count();
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");

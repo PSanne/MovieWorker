@@ -484,7 +484,58 @@
                             <TextBlock Text="Klicke einen Clip in der Timeline an, um seine Farben zu bearbeiten." Style="{StaticResource Hint}"
                                        Visibility="{Binding SelectedClip, Converter={StaticResource NullToVisibility}, ConverterParameter=invert}" />
                             <StackPanel DataContext="{Binding SelectedClip.Color}" Visibility="{Binding Converter={StaticResource NullToVisibility}}">
-                                <TextBlock Text="Eingang" Style="{StaticResource SectionHeader}" />
+                                <TextBlock Text="Korrekturknoten" Style="{StaticResource SectionHeader}" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="−" Width="24" Margin="2,0,0,0" ToolTip="Gewählten Knoten löschen"
+                                            Command="{Binding DataContext.RemoveColorNodeCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                    <Menu DockPanel.Dock="Right" Margin="2,0,0,0" Background="Transparent">
+                                        <MenuItem Header="+ Knoten" Padding="4,1">
+                                            <MenuItem Header="Korrektur (ganzes Bild)" Command="{Binding DataContext.AddColorNodeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="Ganz" />
+                                            <MenuItem Header="Bereich mit Ellipse (z. B. Gesicht)" Command="{Binding DataContext.AddColorNodeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="Ellipse" />
+                                            <MenuItem Header="Bereich mit Rechteck" Command="{Binding DataContext.AddColorNodeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="Rechteck" />
+                                            <MenuItem Header="Vignette (Ränder abdunkeln)" Command="{Binding DataContext.AddColorNodeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="Vignette" />
+                                        </MenuItem>
+                                    </Menu>
+                                    <ComboBox ItemsSource="{Binding NodeChoices}" SelectedItem="{Binding SelectedNode}" />
+                                </DockPanel>
+                                <CheckBox Content="Knoten aktiv" IsChecked="{Binding NodeEnabled}" Margin="0,4,0,0"
+                                          Visibility="{Binding IsNodeSelected, Converter={StaticResource BoolToVisibility}}" />
+
+                                <StackPanel Visibility="{Binding IsNodeSelected, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Maske" Style="{StaticResource SectionHeader}" />
+                                    <ComboBox ItemsSource="{Binding Source={x:Static vm:ColorViewModel.MaskShapes}}" SelectedItem="{Binding SelectedMaskShape}" />
+                                    <Grid Margin="0,4,0,0" Visibility="{Binding HasMask, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="84" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Mitte X" VerticalAlignment="Center" />
+                                        <Slider Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding MaskCenterX}" />
+                                        <TextBlock Grid.Row="1" Text="Mitte Y" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding MaskCenterY}" />
+                                        <TextBlock Grid.Row="2" Text="Breite" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="2" Grid.Column="1" Minimum="0.02" Maximum="1.5" Value="{Binding MaskWidth}" />
+                                        <TextBlock Grid.Row="3" Text="Höhe" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="3" Grid.Column="1" Minimum="0.02" Maximum="1.5" Value="{Binding MaskHeight}" />
+                                        <TextBlock Grid.Row="4" Text="Weiche Kante" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="4" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding MaskFeather}" />
+                                        <CheckBox Grid.Row="5" Grid.Column="1" Content="Umkehren (außen korrigieren)" IsChecked="{Binding MaskInvert}" Margin="0,2" />
+                                        <DockPanel Grid.Row="6" Grid.ColumnSpan="2" Margin="0,4,0,0">
+                                            <Button DockPanel.Dock="Left" Content="Verfolgen ▶" Padding="6,1"
+                                                    ToolTip="Maske ab dem Abspielkopf dem Objekt folgen lassen (bis Clipende, höchstens 10 s)"
+                                                    Command="{Binding DataContext.TrackMaskCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                            <Button DockPanel.Dock="Left" Content="Löschen" Padding="6,1" Margin="4,0,0,0"
+                                                    Command="{Binding DataContext.ClearTrackingCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                            <TextBlock Text="{Binding TrackText}" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="#666" />
+                                        </DockPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                <TextBlock Text="Eingang" Style="{StaticResource SectionHeader}"
+                                           Visibility="{Binding IsNodeSelected, Converter={StaticResource BoolToVisibility}, ConverterParameter=invert}" />
                                 <ComboBox ItemsSource="{Binding Source={x:Static vm:ColorViewModel.TransformChoices}}" SelectedItem="{Binding Transform}" />
                                 <DockPanel Margin="0,4,0,0" Visibility="{Binding UsesLut, Converter={StaticResource BoolToVisibility}}">
                                     <Button DockPanel.Dock="Right" Content="…" Width="28" Margin="4,0,0,0" ToolTip="LUT-Datei wählen"
@@ -539,6 +590,61 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                                 <TextBlock Text="✓ An Referenz angeglichen" Foreground="#1E6B35" Visibility="{Binding IsMatched, Converter={StaticResource BoolToVisibility}}" />
+
+                                <TextBlock Text="Kurven" Style="{StaticResource SectionHeader}" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="↺" Width="24" Margin="4,0,0,0" ToolTip="Alle Kurven zurücksetzen"
+                                            Command="{Binding DataContext.ResetCurvesCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                    <ComboBox ItemsSource="{Binding Source={x:Static vm:ColorViewModel.CurveChannels}}" SelectedItem="{Binding SelectedCurveChannel}" />
+                                </DockPanel>
+                                <c:CurveEditorControl Points="{Binding CurvePoints}" CurveBrush="{Binding CurveBrush}" Margin="0,4,0,0" />
+
+                                <TextBlock Text="Sekundäre Korrektur (Farbbereich)" Style="{StaticResource SectionHeader}" />
+                                <CheckBox Content="Nur einen Farbbereich ändern (z. B. Himmel, Hauttöne)" IsChecked="{Binding SecondaryEnabled}" />
+                                <Grid Margin="0,4,0,0" IsEnabled="{Binding SecondaryEnabled}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="84" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="Farbton" VerticalAlignment="Center" />
+                                    <Grid Grid.Column="1">
+                                        <Border Height="6" VerticalAlignment="Bottom" Margin="5,0">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Color="#FF0000" Offset="0" />
+                                                    <GradientStop Color="#FFFF00" Offset="0.1667" />
+                                                    <GradientStop Color="#00FF00" Offset="0.3333" />
+                                                    <GradientStop Color="#00FFFF" Offset="0.5" />
+                                                    <GradientStop Color="#0000FF" Offset="0.6667" />
+                                                    <GradientStop Color="#FF00FF" Offset="0.8333" />
+                                                    <GradientStop Color="#FF0000" Offset="1" />
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                        </Border>
+                                        <Slider Minimum="0" Maximum="360" Value="{Binding HueCenter}" />
+                                    </Grid>
+                                    <TextBlock Grid.Row="1" Text="Breite" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="1" Grid.Column="1" Minimum="5" Maximum="180" Value="{Binding HueWidth}" />
+                                    <TextBlock Grid.Row="2" Text="Min. Sättigung" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding SaturationMin}" />
+                                    <TextBlock Grid.Row="3" Text="Helligkeit von" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding LumaMin}" />
+                                    <TextBlock Grid.Row="4" Text="Helligkeit bis" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="4" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding LumaMax}" />
+                                    <TextBlock Grid.Row="5" Text="Weichheit" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="5" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Softness}" />
+                                    <CheckBox Grid.Row="6" Grid.Column="1" Content="Auswahl anzeigen (weiß = betroffen)" IsChecked="{Binding ShowSelection}" Margin="0,2" />
+                                    <TextBlock Grid.Row="7" Text="→ Farbton" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="7" Grid.Column="1" Minimum="-90" Maximum="90" Value="{Binding SecondaryHueShift}" />
+                                    <TextBlock Grid.Row="8" Text="→ Sättigung" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="8" Grid.Column="1" Minimum="0" Maximum="200" Value="{Binding SecondarySaturation}" />
+                                    <TextBlock Grid.Row="9" Text="→ Helligkeit" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="9" Grid.Column="1" Minimum="-1" Maximum="1" Value="{Binding SecondaryBrightness}" />
+                                </Grid>
                             </StackPanel>
 
                             <WrapPanel Margin="0,8,0,0" Visibility="{Binding SelectedClip, Converter={StaticResource NullToVisibility}}">

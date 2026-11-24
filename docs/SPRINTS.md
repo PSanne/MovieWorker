@@ -17,8 +17,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | ✅ fertig |
 | 10 | Mehrspur, Multicam & Mischmodi | ✅ fertig |
 | 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | ✅ fertig |
-| 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | ⏳ als Nächstes |
-| 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | geplant |
+| 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | ✅ fertig |
+| 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | ⏳ als Nächstes |
 | 14 | Ton II: ADR, Sprachaufnahme, Surround/räumlicher Ton | geplant |
 | 15 | Effekte & Compositing: Keying, Masken, Tracking, Knoten-Editor | geplant |
 | 16 | Feinschliff & Version 1.0 | geplant |
@@ -99,7 +99,7 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Messinstrumente: Waveform, Vektorskop, Histogramm
 - Farbabgleich EOS 70D ↔ R6 Mark II, Korrekturen kopieren/einfügen
 
-## Sprint 12 – Farbe II
+## Sprint 12 – Farbe II ✅
 - Kurven (RGB und Luma)
 - Sekundäre Korrektur: Farbbereich auswählen (Farbton/Sättigung/Helligkeit) und gezielt ändern
 - Masken (Rechteck, Ellipse) mit weicher Kante, Korrekturknoten (seriell)

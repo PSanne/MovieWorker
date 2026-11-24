@@ -132,6 +132,9 @@ public sealed class TimelineClip
     /// <summary>Farbkorrektur (Belichtung, Kontrast, Farbräder, Farbabgleich …).</summary>
     public Color.ColorGrade Grade { get; set; } = new();
 
+    /// <summary>Weitere Korrekturknoten (nacheinander, optional mit Maske).</summary>
+    public List<Color.CorrectionNode> Nodes { get; set; } = [];
+
     /// <summary>Feste Bildlage (Position, Zoom, Drehung, Deckkraft).</summary>
     public ClipTransform Transform { get; set; } = new();
 
@@ -253,6 +256,7 @@ public sealed class TimelineClip
         copy.PartDurations = [.. PartDurations];
         copy.Transform = Transform.Clone();
         copy.Grade = Grade.Clone();
+        copy.Nodes = Nodes.Select(n => n.Clone()).ToList();
         copy.Keyframes = Keyframes.Select(k => k.Clone()).ToList();
         copy.NestedTracks = NestedTracks?.Select(t => t.Clone()).ToList();
         copy.TransitionIn = TransitionIn?.Clone();

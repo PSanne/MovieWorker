@@ -553,6 +553,133 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    // ---------------------------------------------------------------- Farbe II (Sprint 12)
+
+    [RelayCommand]
+    private void AddColorNode(string? kind)
+    {
+        if (SelectedClip?.Color is not { } color)
+        {
+            return;
+        }
+
+        var mask = kind switch
+        {
+            "Ellipse" => new ColorMask { Shape = MaskShape.Ellipse },
+            "Vignette" => new ColorMask { Shape = MaskShape.Ellipse, Width = 0.85, Height = 0.85, Feather = 0.6, Invert = true },
+            "Rechteck" => new ColorMask { Shape = MaskShape.Rectangle, Feather = 0.15 },
+            _ => null,
+        };
+        var name = kind switch
+        {
+            "Ellipse" => "Bereich",
+            "Vignette" => "Vignette",
+            "Rechteck" => "Bereich",
+            _ => "Korrektur",
+        };
+        color.AddNode(name, mask);
+        if (kind == "Vignette")
+        {
+            Editor.UpdateClip(SelectedClipId!.Value, "Vignette", c => c.Nodes[^1].Grade.Exposure = -0.8);
+        }
+
+        StatusText = mask is null ? "Neuer Korrekturknoten." : "Neuer Knoten mit Maske – Lage und Größe im Reiter Farbe einstellen.";
+    }
+
+    [RelayCommand]
+    private void RemoveColorNode() => SelectedClip?.Color.RemoveSelectedNode();
+
+    [RelayCommand]
+    private void ResetCurves() => SelectedClip?.Color.ResetCurves();
+
+    /// <summary>Lässt die Maske des gewählten Knotens dem Objekt folgen – vom Abspielkopf bis Clipende (höchstens 10 s).</summary>
+    [RelayCommand]
+    public async Task<bool> TrackMaskAsync()
+    {
+        if (SelectedClip?.Color is not { IsNodeSelected: true, Mask: { } mask } color || SelectedClipId is not { } id
+            || Project.FindClip(id) is not (_, { } clip) || clip.SourcePaths.Count == 0)
+        {
+            _dialogs.Error("Zum Verfolgen bitte einen Knoten mit Maske wählen (Reiter Farbe) und die Maske auf das Objekt legen.");
+            return false;
+        }
+
+        var rate = Project.Settings.FrameRate;
+        var start = Math.Clamp(PlayheadFrame, clip.StartFrame, clip.EndFrame - 1);
+        var frames = Math.Min(clip.EndFrame - start, rate.SecondsToFrames(10));
+        const int width = 320;
+        var height = Math.Max(2, (int)Math.Round(width * (double)Project.Settings.Height / Project.Settings.Width / 2) * 2);
+        var (path, seconds) = Core.Preview.PlaybackPlanner.SourceFileAt(clip, start, rate);
+        IsSyncing = true;
+        StatusText = "Maske wird verfolgt …";
+        try
+        {
+            var args = new List<string>
+            {
+                "-v", "error", "-ss", Core.Export.FfmpegArgs.Seconds(seconds), "-t",
+                Core.Export.FfmpegArgs.Seconds(rate.FramesToSeconds(frames) * clip.Speed + 0.1), "-i", path,
+                "-vf", $"setpts=(PTS-STARTPTS)/{clip.Speed.ToString(System.Globalization.CultureInfo.InvariantCulture)},fps={rate.ToFfmpeg()},scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=gray",
+                "-frames:v", frames.ToString(System.Globalization.CultureInfo.InvariantCulture), "-f", "rawvideo", "-",
+            };
+            var data = await _tools.Require().RunForBytesAsync(args);
+            var count = data.Length / (width * height);
+            if (count < 2)
+            {
+                StatusText = "Zu wenig Bilder zum Verfolgen.";
+                return false;
+            }
+
+            var frameInClip = start - clip.StartFrame;
+            var (cx, cy) = mask.CenterAt(frameInClip);
+            var centers = await Task.Run(() => ObjectTracker.Track(data, width, height, count, cx, cy,
+                Math.Max(0.05, mask.Width * 0.6), Math.Max(0.05, mask.Height * 0.6), searchRadius: 16));
+            var (tx, ty) = ObjectTracker.ToKeyframes(centers, frameInClip);
+            var index = color.SelectedNodeIndex;
+            Editor.UpdateClip(id, "Maske verfolgen", c =>
+            {
+                if (c.Nodes[index].Mask is { } m)
+                {
+                    m.TrackX = tx;
+                    m.TrackY = ty;
+                }
+            });
+            StatusText = $"Maske folgt dem Objekt über {count} Bilder.";
+            return true;
+        }
+        catch (Exception ex) when (ex is Core.Media.FfmpegException or IOException or InvalidOperationException)
+        {
+            StatusText = "Verfolgen fehlgeschlagen: " + ex.Message;
+            return false;
+        }
+        finally
+        {
+            IsSyncing = false;
+        }
+    }
+
+    [RelayCommand]
+    private void ClearTracking()
+    {
+        if (SelectedClip?.Color is { IsNodeSelected: true } color && SelectedClipId is { } id)
+        {
+            var index = color.SelectedNodeIndex;
+            Editor.UpdateClip(id, "Verfolgung löschen", c =>
+            {
+                if (c.Nodes[index].Mask is { } m)
+                {
+                    m.TrackX = null;
+                    m.TrackY = null;
+                }
+            });
+        }
+    }
+
+    /// <summary>Maske des gewählten Knotens am Abspielkopf (für die Umrisslinie im Programmmonitor).</summary>
+    public (ColorMask Mask, long FrameInClip)? ActiveMask =>
+        SelectedClip?.Color is { IsNodeSelected: true, Mask: { } mask } && SelectedClipId is { } id
+        && Project.FindClip(id) is (_, { } clip) && clip.Contains(PlayheadFrame)
+            ? (mask, PlayheadFrame - clip.StartFrame)
+            : null;
+
     /// <summary>Messinstrumente für das Bild am Abspielkopf neu berechnen.</summary>
     [RelayCommand]
     public async Task<bool> UpdateScopesAsync()
