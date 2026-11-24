@@ -978,6 +978,109 @@ public sealed class TimelineEditor
         UpdateClip(clipId, transition is null ? "Übergang entfernen" : "Übergang", c => c.TransitionIn = transition?.Clone());
 
     /// <summary>Spur stumm/aktiv schalten.</summary>
+    /// <summary>ADR-Szene für einen Bereich anlegen (gibt eine vorhandene mit gleichem Bereich zurück).</summary>
+    public Audio.AdrCue AddAdrCue(long start, long end, string? name = null)
+    {
+        if (Project.AdrCues.FirstOrDefault(c => c.StartFrame == start && c.EndFrame == end) is { } existing)
+        {
+            return existing;
+        }
+
+        var cue = new Audio.AdrCue { StartFrame = start, EndFrame = Math.Max(start + 1, end), Name = name ?? $"ADR {Project.AdrCues.Count + 1}" };
+        Modify("ADR-Szene anlegen", p =>
+        {
+            p.AdrCues.Add(cue.Clone());
+            return true;
+        });
+        return Project.AdrCues.First(c => c.Id == cue.Id);
+    }
+
+    /// <summary>ADR-Szene umbenennen bzw. den Dialogtext ändern.</summary>
+    public bool UpdateAdrCue(Guid cueId, string description, Action<Audio.AdrCue> change) =>
+        Modify(description, $"adr:{cueId}:{description}", p =>
+        {
+            if (p.AdrCues.FirstOrDefault(c => c.Id == cueId) is not { } cue)
+            {
+                return false;
+            }
+
+            change(cue);
+            return true;
+        });
+
+    public bool RemoveAdrCue(Guid cueId) =>
+        Modify("ADR-Szene entfernen", p => p.AdrCues.RemoveAll(c => c.Id == cueId) > 0);
+
+    /// <summary>Neuen Take zu einer ADR-Szene hinzufügen.</summary>
+    public bool AddAdrTake(Guid cueId, Audio.AdrTake take) =>
+        Modify("ADR-Take aufgenommen", p =>
+        {
+            if (p.AdrCues.FirstOrDefault(c => c.Id == cueId) is not { } cue)
+            {
+                return false;
+            }
+
+            cue.Takes.Add(take.Clone());
+            return true;
+        });
+
+    /// <summary>Einen Take in die Timeline legen: überschreibt den Bereich auf der Spur und merkt den Take als verwendet.</summary>
+    public bool UseAdrTake(Guid cueId, Guid takeId, Guid trackId, TimelineClip clip) =>
+        Modify("ADR-Take verwenden", p =>
+        {
+            if (p.AdrCues.FirstOrDefault(c => c.Id == cueId) is not { } cue || cue.Takes.All(t => t.Id != takeId)
+                || p.Tracks.FirstOrDefault(t => t.Id == trackId) is not { } track)
+            {
+                return false;
+            }
+
+            ClearRange(track, cue.StartFrame, cue.EndFrame, p.Settings.FrameRate);
+            clip.StartFrame = cue.StartFrame;
+            clip.LengthFrames = Math.Min(clip.LengthFrames, cue.LengthFrames);
+            track.Clips.Add(clip);
+            cue.UsedTakeId = takeId;
+            return true;
+        });
+
+    /// <summary>
+    /// Originalton (Kameraton auf V1) in einem Bereich stummschalten – die Clips werden an den Bereichsgrenzen geteilt.
+    /// Typisch für ADR: Der neu gesprochene Dialog ersetzt den Originalton.
+    /// </summary>
+    public bool MuteOriginalAudio(long start, long end) =>
+        Modify("Originalton stumm", p =>
+        {
+            var rate = p.Settings.FrameRate;
+            var track = p.VideoTracks.FirstOrDefault();
+            if (track is null || end <= start)
+            {
+                return false;
+            }
+
+            var changed = false;
+            foreach (var clip in track.Clips.Where(c => c.StartFrame < end && c.EndFrame > start && c.HasAudio && !c.AudioMuted).ToList())
+            {
+                var target = clip;
+                if (target.StartFrame < start)
+                {
+                    target = SplitClip(target, start, rate);
+                    target.TransitionIn = null;
+                    track.Clips.Add(target);
+                }
+
+                if (target.EndFrame > end)
+                {
+                    var right = SplitClip(target, end, rate);
+                    right.TransitionIn = null;
+                    track.Clips.Add(right);
+                }
+
+                target.AudioMuted = true;
+                changed = true;
+            }
+
+            return changed;
+        });
+
     /// <summary>Ändert den Kanalzug einer Spur (Fader, Panorama, Effekte, Ducking) – aufeinanderfolgende Änderungen werden zusammengefasst.</summary>
     public bool SetTrackAudio(Guid trackId, string description, Action<TimelineTrack> change) =>
         Modify(description, $"mix:{trackId}:{description}", p =>
@@ -1021,10 +1124,10 @@ public sealed class TimelineEditor
         });
 
     /// <summary>Fügt eine neue Spur hinzu (Video oben, Audio unten).</summary>
-    public TimelineTrack AddTrack(TrackKind kind)
+    public TimelineTrack AddTrack(TrackKind kind, string? name = null)
     {
         var count = Project.Tracks.Count(t => t.Kind == kind) + 1;
-        var track = new TimelineTrack { Kind = kind, Name = kind == TrackKind.Video ? $"V{count}" : $"A{count}" };
+        var track = new TimelineTrack { Kind = kind, Name = name ?? (kind == TrackKind.Video ? $"V{count}" : $"A{count}") };
         Modify("Spur hinzufügen", p =>
         {
             if (kind == TrackKind.Video)

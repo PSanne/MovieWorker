@@ -607,6 +607,74 @@ public static class SmokeTest
         SaveScreenshot(window, Path.Combine(c.OutputFolder, "ton.png"));
         clipCount = vm.Project.AllClips.Count();
 
+        // ---- Ton II (Sprint 14): Sprachaufnahme, ADR mit Takes, Raumklang 5.1
+        var rec = vm.Recording;
+        rec.FolderOverride = Path.Combine(c.Temp, "Aufnahmen");
+        await rec.RefreshDevicesCommand.ExecuteAsync(null);
+        c.Check(rec.Devices.Contains(MovieWorker.Core.Audio.RecordingDevice.TestTone), $"Aufnahmegeräte gesucht ({rec.Devices.Count - 1} Mikrofon(e)) – " + rec.StatusText);
+        rec.Device = MovieWorker.Core.Audio.RecordingDevice.TestTone;
+        rec.PreRollSeconds = 1;
+        rec.AdrMode = false;
+        vm.Editor.SetMarks(null, null);
+        var voFrame = vm.Project.Settings.FrameRate.SecondsToFrames(2);
+        vm.PlayheadFrame = voFrame;
+        var mediaBefore = vm.MediaItems.Count;
+        var voTask = rec.ToggleRecordCommand.ExecuteAsync(null);
+        await Task.Delay(3000);
+        c.Check(rec.IsRecording, "Sprachaufnahme läuft: " + rec.StatusText);
+        await rec.ToggleRecordCommand.ExecuteAsync(null);
+        await voTask;
+        var speaker = vm.Project.AudioTracks.FirstOrDefault(t => t.Name == "Sprecher");
+        c.Check(speaker is not null && speaker.Clips.Any(cl => cl.StartFrame == voFrame) && vm.MediaItems.Count == mediaBefore + 1,
+            "Sprachaufnahme am Abspielkopf auf Spur „Sprecher“ eingesetzt: " + rec.StatusText);
+
+        var adrStart = vm.Project.Settings.FrameRate.SecondsToFrames(4);
+        vm.Editor.SetMarks(adrStart, adrStart + 40);
+        rec.CreateCueFromRangeCommand.Execute(null);
+        c.Check(rec.SelectedCue is not null && rec.AdrMode, "ADR-Szene aus In/Out angelegt");
+        rec.Dialog = "Wo warst du gestern Abend?";
+        rec.TargetTrack = null;
+        rec.Loop = true;
+        rec.MuteOriginal = true;
+        rec.PreRollSeconds = 0.5;
+        var adrTask = rec.ToggleRecordCommand.ExecuteAsync(null);
+        var waited = 0;
+        while ((rec.SelectedCue?.Takes.Count ?? 0) < 2 && waited < 30000)
+        {
+            await Task.Delay(200);
+            waited += 200;
+        }
+
+        await rec.ToggleRecordCommand.ExecuteAsync(null);
+        await adrTask;
+        var cue = vm.Project.AdrCues.Single();
+        var adrTrack = vm.Project.AudioTracks.FirstOrDefault(t => t.Name == "ADR");
+        c.Check(cue.Takes.Count >= 2 && cue.UsedTakeId == cue.Takes.MaxBy(t => t.Number)!.Id && cue.Dialog.StartsWith("Wo warst", StringComparison.Ordinal),
+            $"ADR in Schleife: {cue.Takes.Count} Takes, der letzte ist eingesetzt");
+        c.Check(adrTrack is not null && adrTrack.Clips.Any(cl => cl.StartFrame == adrStart && cl.LengthFrames == 40), "ADR-Take liegt genau im Bereich");
+        c.Check(vm.Project.VideoTracks.First().Clips.Where(cl => cl.StartFrame < adrStart + 40 && cl.EndFrame > adrStart).All(cl => cl.AudioMuted),
+            "Originalton im ADR-Bereich stummgeschaltet");
+        rec.UseTakeCommand.Execute(rec.Takes.Last());
+        c.Check(vm.Project.AdrCues.Single().UsedTakeId == cue.Takes.MinBy(t => t.Number)!.Id, "Älteren Take gewählt");
+
+        mixer.Strips.First(st => st.TrackId == vm.Project.VideoTracks.First().Id).ApplySpaceCommand.Execute("Dialog");
+        mixer.Strips.First(st => st.TrackId == adrTrack!.Id).ApplySpaceCommand.Execute("Dialog");
+        mixer.Strips.First(st => st.TrackId == musicTrack.Id).ApplySpaceCommand.Execute("Musik");
+        c.Check(vm.Project.VideoTracks.First().Audio.Center > 0.99 && vm.Project.Tracks.First(t => t.Id == musicTrack.Id).Audio.Depth > 0,
+            "Raum: Dialog im Center, Musik mit Raum – " + mixer.Strips.First(st => st.TrackId == musicTrack.Id).PositionText);
+        var surroundPreset = MovieWorker.Core.Export.ExportPreset.Find("master-51")!;
+        vm.Editor.SetMarks(adrStart - 25, adrStart + 100);
+        c.Check(MovieWorker.Core.Export.ExportPreflight.Check(vm.Project, MovieWorker.Core.Export.ExportPreset.Default).Any(i => i.Message.Contains("heruntergemischt")),
+            "Hinweis: Stereo-Export wird heruntergemischt");
+        var surroundJob = vm.EnqueueExport(surroundPreset, Path.Combine(exportFolder, "raumklang51.mp4"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(surroundJob.State == ExportJobState.Done, "5.1-Export: " + surroundJob.Detail);
+        var surroundInfo = await tools.Require().ProbeAsync(surroundJob.OutputPath);
+        c.Check(surroundInfo.Audio?.Channels == 6, $"5.1-Datei hat {surroundInfo.Audio?.Channels} Tonkanäle");
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "ton2.png"));
+        clipCount = vm.Project.AllClips.Count();
+        imported = [.. imported, .. vm.MediaItems.Skip(imported.Count)];
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");
@@ -619,6 +687,8 @@ public static class SmokeTest
             "Ordner, Bewertung, Schlagwörter und Synchronisation gespeichert");
         c.Check(settings.Settings.RecentProjects.Contains(projectFile), "Zuletzt geöffnet gemerkt");
         c.Check(vm.Project.Master.LoudnessTarget == -14 && vm.Project.Tracks.Any(t => t.Audio.DuckBy is not null), "Mischpult-Einstellungen gespeichert");
+        c.Check(vm.Project.AdrCues.Count == 1 && vm.Project.AdrCues[0].Takes.Count >= 2 && vm.Project.VideoTracks.First().Audio.Center > 0.99,
+            "ADR-Szenen und Raumklang gespeichert");
 
         // ---- Karten-Import (kopieren + Prüfsumme)
         var plan = CardImporter.Plan(CardScanner.Scan(c.MediaFolder), Path.Combine(c.Temp, "Import"), DateTime.Today, "EOS 70D");

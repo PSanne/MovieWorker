@@ -324,6 +324,9 @@ public sealed class MovieProject
     /// <summary>Medienpool: alle importierten Aufnahmen (auch die, die noch nicht in der Timeline liegen).</summary>
     public List<MediaItem> Media { get; set; } = [];
 
+    /// <summary>ADR-Szenen (Nachsynchronisation) mit ihren Takes.</summary>
+    public List<Audio.AdrCue> AdrCues { get; set; } = [];
+
     /// <summary>Gesamtsumme (Master) des Mischpults.</summary>
     public Audio.MasterAudio Master { get; set; } = new();
 
@@ -385,6 +388,7 @@ public sealed class MovieProject
         Media = [.. Media],
         Bins = [.. Bins],
         Master = Master.Clone(),
+        AdrCues = AdrCues.Select(c => c.Clone()).ToList(),
         MarkIn = MarkIn,
         MarkOut = MarkOut,
     };

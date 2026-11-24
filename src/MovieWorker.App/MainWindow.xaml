@@ -114,6 +114,10 @@
                 <MenuItem Header="_Mischpult" Click="ShowMixer_Click" />
                 <MenuItem Header="_Lautheit messen" Command="{Binding Mixer.MeasureLoudnessCommand}" />
                 <Separator />
+                <MenuItem Header="_Aufnahme starten / stoppen" InputGestureText="Strg+Umschalt+R" Command="{Binding Recording.ToggleRecordCommand}" />
+                <MenuItem Header="ADR-Szene aus _In/Out anlegen" Command="{Binding Recording.CreateCueFromRangeCommand}" />
+                <MenuItem Header="Mikrofone _suchen" Command="{Binding Recording.RefreshDevicesCommand}" />
+                <Separator />
                 <MenuItem Header="Spur des Clips bei _Sprache absenken (Ducking)" Command="{Binding DuckSelectedTrackCommand}" />
             </MenuItem>
             <MenuItem Header="_Extras">
@@ -680,6 +684,61 @@
                 <TabItem Header="Ton" x:Name="AudioTab">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Mixer}">
                         <StackPanel Margin="8">
+                            <Expander Header="Sprachaufnahme &amp; ADR" x:Name="RecordingExpander" Margin="0,0,0,6" DataContext="{Binding DataContext.Recording, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <StackPanel Margin="0,4,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition /><RowDefinition /><RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Mikrofon" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Column="1" Margin="0,2" ItemsSource="{Binding Devices}" SelectedItem="{Binding Device}" />
+                                        <Button Grid.Column="2" Content="⟳" Width="24" Margin="4,2,0,2" ToolTip="Mikrofone suchen" Command="{Binding RefreshDevicesCommand}" />
+                                        <TextBlock Grid.Row="1" Text="Zielspur" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,2" ItemsSource="{Binding TargetTracks}" SelectedItem="{Binding TargetTrack}" />
+                                        <TextBlock Grid.Row="2" Text="Vorlauf" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="2" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="5" Value="{Binding PreRollSeconds}" TickFrequency="0.5" IsSnapToTickEnabled="True" />
+                                        <TextBlock Grid.Row="2" Grid.Column="2" Margin="4,0,0,0" VerticalAlignment="Center" Text="{Binding PreRollSeconds, StringFormat={}{0:0.0} s}" />
+                                    </Grid>
+                                    <CheckBox Content="ADR – nur den In/Out-Bereich aufnehmen" IsChecked="{Binding AdrMode}" Margin="0,4,0,0" />
+                                    <StackPanel Margin="18,2,0,0" Visibility="{Binding AdrMode, Converter={StaticResource BoolToVisibility}}">
+                                        <CheckBox Content="Schleife: Takes nacheinander, bis Stopp" IsChecked="{Binding Loop}" />
+                                        <CheckBox Content="Originalton im Bereich stummschalten" IsChecked="{Binding MuteOriginal}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding ModeText}" Style="{StaticResource Hint}" TextWrapping="Wrap" />
+                                    <Button Content="{Binding RecordButtonText}" Command="{Binding ToggleRecordCommand}" Padding="10,4" Margin="0,4"
+                                            FontWeight="SemiBold" Foreground="#B00020" x:Name="RecordButton" />
+                                    <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" FontSize="11" x:Name="RecordingStatus" />
+
+                                    <TextBlock Text="ADR-Szenen" Style="{StaticResource SectionHeader}" />
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="Entfernen" Padding="6,0" Margin="4,2,0,2" Command="{Binding RemoveCueCommand}" />
+                                        <Button DockPanel.Dock="Right" Content="Aus In/Out" Padding="6,0" Margin="4,2,0,2" Command="{Binding CreateCueFromRangeCommand}" />
+                                        <ComboBox Margin="0,2" ItemsSource="{Binding Cues}" SelectedItem="{Binding SelectedCue}" />
+                                    </DockPanel>
+                                    <StackPanel Visibility="{Binding HasCue, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="Dialog (zum Ablesen)" FontSize="11" Foreground="#666" Margin="0,4,0,0" />
+                                        <TextBox Text="{Binding Dialog, UpdateSourceTrigger=LostFocus}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="40" FontSize="14" />
+                                        <ItemsControl ItemsSource="{Binding Takes}" Margin="0,4,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:AdrTakeViewModel}">
+                                                    <DockPanel Margin="0,1">
+                                                        <Button DockPanel.Dock="Right" Content="Verwenden" Padding="6,0"
+                                                                Command="{Binding DataContext.UseTakeCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding}" />
+                                                        <TextBlock Text="{Binding Text}" VerticalAlignment="Center" />
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Expander>
+
                             <TextBlock Text="Summe (Master)" Style="{StaticResource SectionHeader}" Margin="0,0,0,4" />
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -709,7 +768,7 @@
 
                             <TextBlock Text="Spuren" Style="{StaticResource SectionHeader}" />
                             <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
-                                       Text="M = stumm, S = solo (nur diese Spuren hören). Die Effekte wirken auf die ganze Spur – in der Vorschau hörst du Lautstärke, Panorama und Solo, beim Export alles." />
+                                       Text="M = stumm, S = solo (nur diese Spuren hören). Die Effekte wirken auf die ganze Spur – in der Vorschau hörst du Lautstärke, Panorama und Solo, beim Export alles. Der Raum (5.1) wirkt bei 5.1-Vorlagen; Stereo-Exporte werden daraus heruntergemischt." />
                             <ItemsControl ItemsSource="{Binding Strips}" x:Name="MixerStrips">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:MixerStripViewModel}">
@@ -745,6 +804,35 @@
                                                     <Slider Grid.Row="1" Grid.Column="1" Margin="0,2" Minimum="-1" Maximum="1" Value="{Binding Pan}" SmallChange="0.05" LargeChange="0.25" />
                                                     <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding PanText}" VerticalAlignment="Center" HorizontalAlignment="Right" />
                                                 </Grid>
+                                                <Expander Header="Raum (5.1)" Margin="0,2,0,0">
+                                                    <StackPanel Margin="0,4,0,0">
+                                                        <TextBlock FontSize="11" Foreground="#666" Text="{Binding PositionText}" />
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="80" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition /><RowDefinition /><RowDefinition />
+                                                            </Grid.RowDefinitions>
+                                                            <TextBlock Text="Vorne ↔ hinten" VerticalAlignment="Center" FontSize="11" />
+                                                            <Slider Grid.Column="1" Margin="0,2" Minimum="0" Maximum="1" Value="{Binding Depth}" SmallChange="0.05" LargeChange="0.25" />
+                                                            <TextBlock Grid.Row="1" Text="Center" VerticalAlignment="Center" />
+                                                            <Slider Grid.Row="1" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="1" Value="{Binding Center}" SmallChange="0.05" LargeChange="0.25"
+                                                                    ToolTip="Anteil auf dem mittleren Lautsprecher – Dialog gehört in den Center" />
+                                                            <TextBlock Grid.Row="2" Text="Subwoofer" VerticalAlignment="Center" />
+                                                            <Slider Grid.Row="2" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="1" Value="{Binding Lfe}" SmallChange="0.05" LargeChange="0.25"
+                                                                    ToolTip="Tiefbass-Anteil (LFE, nur unter 120 Hz)" />
+                                                        </Grid>
+                                                        <UniformGrid Columns="5" Margin="0,2,0,0">
+                                                            <Button Content="Dialog" Margin="0,0,2,0" Command="{Binding ApplySpaceCommand}" CommandParameter="Dialog" />
+                                                            <Button Content="Musik" Margin="0,0,2,0" Command="{Binding ApplySpaceCommand}" CommandParameter="Musik" />
+                                                            <Button Content="Atmo" Margin="0,0,2,0" Command="{Binding ApplySpaceCommand}" CommandParameter="Atmo" />
+                                                            <Button Content="Effekt" Margin="0,0,2,0" Command="{Binding ApplySpaceCommand}" CommandParameter="Effekt" />
+                                                            <Button Content="Stereo" Command="{Binding ApplySpaceCommand}" CommandParameter="Stereo" />
+                                                        </UniformGrid>
+                                                    </StackPanel>
+                                                </Expander>
                                                 <Expander Header="Effekte und Ducking" Margin="0,4,0,0">
                                                     <Grid Margin="0,4,0,0">
                                                         <Grid.ColumnDefinitions>

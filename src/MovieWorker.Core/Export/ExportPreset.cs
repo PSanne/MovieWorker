@@ -38,7 +38,8 @@ public sealed record ExportPreset(
     ReframeMode Reframe = ReframeMode.BlurBackground,
     bool AudioOnly = false,
     double? MaxFrameRate = null,
-    bool HdrOutput = false)
+    bool HdrOutput = false,
+    bool SurroundAudio = false)
 {
     public override string ToString() => Name;
 
@@ -106,6 +107,12 @@ public sealed record ExportPreset(
         new("audio-mp3", "Nur Ton – MP3 (320 kbit/s)",
             "Die fertige Tonmischung als MP3.",
             PresetCategory.Ton, ".mp3", "", [], ["-c:a", "libmp3lame", "-b:a", "320k"], AudioOnly: true),
+        new("master-51", "Master 5.1 – H.264 mit AAC-5.1-Ton",
+            "Bild in hoher Qualität mit Raumklang (5.1: links, rechts, Center, Subwoofer, hinten links/rechts) – für Heimkino, Mediaplayer und Blu-ray-Authoring.",
+            PresetCategory.Master, ".mp4", "yuv420p", X264Web, ["-c:a", "aac", "-b:a", "640k"], SurroundAudio: true),
+        new("audio-wav-51", "Nur Ton – WAV 5.1 (6 Kanäle, 24 Bit)",
+            "Die Raumklang-Mischung unkomprimiert, z. B. für Mastering oder Kino.",
+            PresetCategory.Ton, ".wav", "", [], Pcm24, AudioOnly: true, SurroundAudio: true),
     ];
 
     public static ExportPreset Default => All[0];

@@ -210,7 +210,7 @@ public static class ExportBuilder
 
         string ChannelStrip(TimelineTrack track, string input)
         {
-            var chain = new List<string>(track.Audio.Filters());
+            var chain = new List<string>(track.Audio.Filters(preset.SurroundAudio));
             if (Math.Abs(track.VolumeDb) > 1e-6)
             {
                 chain.Add($"volume={Number(track.VolumeDb)}dB");
@@ -309,7 +309,17 @@ public static class ExportBuilder
         var mix = buses.Count == 1
             ? $"{buses[0].Label}anull"
             : $"{string.Concat(buses.Select(b => b.Label))}amix=inputs={buses.Count}:duration=first:normalize=0";
-        graph.Append(CultureInfo.InvariantCulture, $"{mix}{(master.Count == 0 ? string.Empty : "," + string.Join(',', master))}[aout]");
+        if (preset.SurroundAudio && !measureLoudness)
+        {
+            // Subwoofer-Kanal nur tiefe Frequenzen (wie im Kino üblich).
+            graph.Append(CultureInfo.InvariantCulture, $"{mix}{(master.Count == 0 ? string.Empty : "," + string.Join(',', master))}[amaster];");
+            graph.Append("[amaster]channelsplit=channel_layout=5.1[sFL][sFR][sFC][sLFE][sBL][sBR];[sLFE]lowpass=f=120[sLFEf];");
+            graph.Append("[sFL][sFR][sFC][sLFEf][sBL][sBR]join=inputs=6:channel_layout=5.1[aout]");
+        }
+        else
+        {
+            graph.Append(CultureInfo.InvariantCulture, $"{mix}{(master.Count == 0 ? string.Empty : "," + string.Join(',', master))}[aout]");
+        }
 
         if (measureLoudness)
         {
@@ -362,8 +372,8 @@ public static class ExportBuilder
     }
 
     /// <summary>Misst die Lautheit der fertigen Mischung (ffmpeg gibt die Werte auf stderr aus).</summary>
-    public static FfmpegJob BuildLoudnessMeasurement(MovieProject project, long? rangeStart = null, long? rangeEnd = null) =>
-        Build(project, ExportPreset.Find("audio-wav")!, "-", rangeStart, rangeEnd, measureLoudness: true);
+    public static FfmpegJob BuildLoudnessMeasurement(MovieProject project, long? rangeStart = null, long? rangeEnd = null, bool surround = false) =>
+        Build(project, ExportPreset.Find(surround ? "audio-wav-51" : "audio-wav")!, "-", rangeStart, rangeEnd, measureLoudness: true);
 
     /// <summary>Exaktes Vorschaubild eines Timeline-Bildes – über dieselbe Kette wie der Export.</summary>
     public static FfmpegJob BuildStill(MovieProject project, long frame, int height) =>

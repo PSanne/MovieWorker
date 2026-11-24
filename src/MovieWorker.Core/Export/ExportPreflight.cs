@@ -133,6 +133,18 @@ public static class ExportPreflight
             issues.Add(new(IssueSeverity.Info, $"Die Bildrate wird für diese Plattform auf {outRate} fps gesenkt."));
         }
 
+        // Raumklang
+        var spatial = project.Tracks.Any(t => project.IsAudible(t) && t.Audio.IsSpatial);
+        if (preset.SurroundAudio && !spatial)
+        {
+            issues.Add(new(IssueSeverity.Info,
+                "5.1-Export: Alle Spuren liegen vorne links/rechts. Im Mischpult unter „Raum (5.1)“ kannst du Dialog auf den Center und Musik/Atmo nach hinten legen."));
+        }
+        else if (!preset.SurroundAudio && spatial && !preset.IsStillImage)
+        {
+            issues.Add(new(IssueSeverity.Info, "Der Raumklang (5.1) wird für diese Vorlage nach Stereo heruntergemischt (ITU-Norm)."));
+        }
+
         return issues;
     }
 

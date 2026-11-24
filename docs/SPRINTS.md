@@ -19,8 +19,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | ✅ fertig |
 | 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | ✅ fertig |
 | 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | ✅ fertig |
-| 14 | Ton II: ADR, Sprachaufnahme, Surround/räumlicher Ton | ⏳ als Nächstes |
-| 15 | Effekte & Compositing: Keying, Masken, Tracking, Knoten-Editor | geplant |
+| 14 | Ton II: ADR, Sprachaufnahme, Surround/räumlicher Ton | ✅ fertig |
+| 15 | Effekte & Compositing: Keying, Masken, Tracking, Knoten-Editor | ⏳ als Nächstes |
 | 16 | Feinschliff & Version 1.0 | geplant |
 
 ---
@@ -111,10 +111,11 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Lautheit messen und beim Export genau normalisieren (zwei Durchgänge; −14 LUFS YouTube, −16 Podcast, −23 EBU R128)
 - Auto-Ducking (Musik leiser bei Sprache) per Sidechain-Kompressor
 
-## Sprint 14 – Ton II
-- Sprachaufnahme (Voice-over) direkt in die Timeline
-- ADR: Dialog nachsynchronisieren (Szene im Loop, Takes)
-- Surround (5.1) und räumlicher Ton (Panorama im Raum), Stereo-Downmix
+## Sprint 14 – Ton II ✅
+- Sprachaufnahme (Voice-over) direkt in die Timeline – Mikrofon über ffmpeg/DirectShow, Vorlauf, genaue Ausrichtung
+- ADR: Dialog nachsynchronisieren – Szene aus In/Out, Dialogtext zum Ablesen, Schleife mit Takes, Take wählen, Originalton stummschalten
+- Surround (5.1) und räumlicher Ton: je Spur vorne/hinten, Center, Subwoofer (mit Tiefpass), Vorlagen Dialog/Musik/Atmo/Effekt
+- Stereo-Downmix nach ITU-Norm, 5.1-Vorlagen (MP4 mit AAC 5.1, WAV 6 Kanäle)
 
 ## Sprint 15 – Effekte & Compositing
 - Keying (Greenscreen/Bluescreen) mit Spill-Unterdrückung

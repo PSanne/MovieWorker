@@ -134,6 +134,41 @@ public sealed partial class MixerStripViewModel(TimelineEditor editor, Guid trac
         set => Set("Ducking-Stärke", t => t.Audio.DuckAmountDb = Math.Round(Math.Clamp(value, 3, 30)));
     }
 
+    // ---------- Raumklang (5.1) ----------
+    public double Depth
+    {
+        get => Track.Audio.Depth;
+        set => Set("Raum: Tiefe", t => t.Audio.Depth = Math.Round(Math.Clamp(value, 0, 1), 2));
+    }
+
+    public double Center
+    {
+        get => Track.Audio.Center;
+        set => Set("Raum: Center", t => t.Audio.Center = Math.Round(Math.Clamp(value, 0, 1), 2));
+    }
+
+    public double Lfe
+    {
+        get => Track.Audio.Lfe;
+        set => Set("Raum: Subwoofer", t => t.Audio.Lfe = Math.Round(Math.Clamp(value, 0, 1), 2));
+    }
+
+    public string PositionText => SurroundPanner.Describe(Track.Audio);
+
+    /// <summary>Raum-Vorlage: „Dialog“ (Center), „Musik“ (vorne breit, etwas Raum), „Atmo“ (hinten), „Effekt“ (mit Subwoofer).</summary>
+    [RelayCommand]
+    private void ApplySpace(string? preset) => Set("Raum-Vorlage", t =>
+    {
+        (t.Audio.Pan, t.Audio.Depth, t.Audio.Center, t.Audio.Lfe) = preset switch
+        {
+            "Dialog" => (0.0, 0.0, 1.0, 0.0),
+            "Musik" => (0.0, 0.3, 0.0, 0.2),
+            "Atmo" => (0.0, 0.85, 0.0, 0.0),
+            "Effekt" => (0.0, 0.2, 0.3, 0.6),
+            _ => (0.0, 0.0, 0.0, 0.0),
+        };
+    });
+
     public string EffectsText
     {
         get

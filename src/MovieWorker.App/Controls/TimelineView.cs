@@ -96,6 +96,7 @@ public sealed class TimelineView : FrameworkElement
     private static readonly Brush KeyframeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xD2, 0x4A)));
     private static readonly Brush WaveBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xC0, 0xDD, 0xF5, 0xE6)));
     private static readonly Brush MarkBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x30, 0x7F, 0xB8, 0xFF)));
+    private static readonly Brush AdrBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xF0, 0x8C, 0x00)));
     private static readonly Brush MarkEdgeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x7F, 0xB8, 0xFF)));
     private static readonly Brush FadeBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x70, 0, 0, 0)));
     private static readonly Brush BadgeBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xC0, 0x10, 0x10, 0x10)));
@@ -334,6 +335,12 @@ public sealed class TimelineView : FrameworkElement
         {
             var end = project.MarkOut ?? project.DurationFrames;
             dc.DrawRectangle(MarkBrush, null, new Rect(X(markIn), 0, Math.Max(1, X(end) - X(markIn)), height));
+        }
+
+        // ADR-Szenen: orangefarbener Balken am oberen Rand
+        foreach (var cue in project.AdrCues)
+        {
+            dc.DrawRectangle(AdrBrush, null, new Rect(X(cue.StartFrame), 0, Math.Max(2, X(cue.EndFrame) - X(cue.StartFrame)), 4));
         }
 
         // Clips

@@ -39,10 +39,23 @@ public sealed class TrackAudio
     /// <summary>Wie stark abgesenkt wird (dB).</summary>
     public double DuckAmountDb { get; set; } = 12;
 
+    /// <summary>Raumklang: Tiefe 0 (vorne) … 1 (hinten).</summary>
+    public double Depth { get; set; }
+
+    /// <summary>Raumklang: Anteil auf dem Center-Lautsprecher 0 … 1 (Dialog meist 1).</summary>
+    public double Center { get; set; }
+
+    /// <summary>Raumklang: Anteil auf dem Subwoofer (LFE) 0 … 1.</summary>
+    public double Lfe { get; set; }
+
+    /// <summary>Hat die Spur Raumklang-Einstellungen (über links/rechts hinaus)?</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsSpatial => Depth > 0.001 || Center > 0.001 || Lfe > 0.001;
+
     public TrackAudio Clone() => (TrackAudio)MemberwiseClone();
 
-    /// <summary>Effektkette des Kanalzugs (ohne Lautstärke) als ffmpeg-Filter.</summary>
-    public IReadOnlyList<string> Filters()
+    /// <summary>Effektkette des Kanalzugs (ohne Lautstärke) als ffmpeg-Filter, zuletzt die Position (Stereo oder 5.1).</summary>
+    public IReadOnlyList<string> Filters(bool surround = false)
     {
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var filters = new List<string>();
@@ -82,11 +95,9 @@ public sealed class TrackAudio
             filters.Add($"aecho=0.9:0.9:43|71|113|163:{N(0.35 * a)}|{N(0.27 * a)}|{N(0.2 * a)}|{N(0.12 * a)}");
         }
 
-        if (Math.Abs(Pan) > 0.001)
+        if (SurroundPanner.Filter(this, surround) is { } pan)
         {
-            var left = Math.Min(1, 1 - Pan);
-            var right = Math.Min(1, 1 + Pan);
-            filters.Add($"pan=stereo|c0={N(left)}*c0|c1={N(right)}*c1");
+            filters.Add(pan);
         }
 
         return filters;

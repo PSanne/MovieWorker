@@ -44,6 +44,13 @@ public partial class MainWindow : Window
         OverviewTimeline.SizeChanged += (_, _) => OverviewTimeline.ZoomToFit();
         Loaded += (_, _) => SyncScrollBar();
         SourceMonitor.Attach(viewModel);
+        viewModel.Recording.PlaybackRequested += (_, frame) =>
+        {
+            ProgramMonitor.Pause();
+            _viewModel.PlayheadFrame = frame;
+            ProgramMonitor.Play(1);
+        };
+        viewModel.Recording.StopPlaybackRequested += (_, _) => ProgramMonitor.Pause();
         Inspector.SelectionChanged += (_, e) =>
         {
             if (e.OriginalSource == Inspector)
@@ -203,6 +210,11 @@ public partial class MainWindow : Window
                 break;
             case Key.B when !ctrl && !shift:
                 _viewModel.TrimMode = TrimMode.Ripple;
+                break;
+            case Key.R when ctrl && shift:
+                AudioTab.IsSelected = true;
+                RecordingExpander.IsExpanded = true;
+                _viewModel.Recording.ToggleRecordCommand.Execute(null);
                 break;
             case Key.R when !ctrl && !shift:
                 _viewModel.TrimMode = TrimMode.Roll;

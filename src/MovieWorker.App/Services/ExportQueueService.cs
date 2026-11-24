@@ -90,7 +90,7 @@ public sealed class ExportQueueService(MediaToolsService tools)
             if (job.Snapshot.Master.LoudnessTarget is not null && !job.Preset.IsStillImage)
             {
                 job.Detail = "Lautheit wird gemessen …";
-                var measure = ExportBuilder.BuildLoudnessMeasurement(job.Snapshot, job.RangeStart, job.RangeEnd);
+                var measure = ExportBuilder.BuildLoudnessMeasurement(job.Snapshot, job.RangeStart, job.RangeEnd, job.Preset.SurroundAudio);
                 loudness = Core.Audio.LoudnessMeasurement.Parse(await client.RunForStderrAsync(measure.Arguments, job.Cancellation.Token));
                 job.Measured = loudness;
             }

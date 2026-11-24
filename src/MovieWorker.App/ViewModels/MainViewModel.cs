@@ -48,6 +48,7 @@ public sealed partial class MainViewModel : ObservableObject
         RebuildBins();
         ApplySort();
         RefreshRecentProjects();
+        Recording = new RecordingViewModel(this);
         StatusText = tools.IsAvailable ? "Bereit." : tools.StatusText;
     }
 
@@ -65,6 +66,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Mischpult (Reiter „Ton“).</summary>
     public MixerViewModel Mixer { get; }
+
+    /// <summary>Sprachaufnahme und ADR (Reiter „Ton“).</summary>
+    public RecordingViewModel Recording { get; }
 
     public ProxyService Proxies { get; }
 
@@ -1750,6 +1754,13 @@ public sealed partial class MainViewModel : ObservableObject
         RaiseProjectChanged();
     }
 
+    /// <summary>Eine neue Aufnahme (Sprachaufnahme, ADR-Take) in den Medienpool legen.</summary>
+    public void AddRecordedMedia(MediaItem media)
+    {
+        Editor.AddMedia([media]);
+        AddMediaViewModel(media);
+    }
+
     private MediaItemViewModel AddMediaViewModel(MediaItem media)
     {
         var vm = new MediaItemViewModel(media, () => Editor.NotifyMediaChanged());
@@ -1789,6 +1800,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         SelectedClip?.Refresh();
         Mixer.Sync();
+        Recording?.Sync();
         DeleteSelectedClipCommand.NotifyCanExecuteChanged();
         RippleDeleteSelectedClipCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(PlayheadText));

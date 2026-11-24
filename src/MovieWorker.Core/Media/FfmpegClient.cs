@@ -115,6 +115,21 @@ public sealed class FfmpegClient(FfmpegPaths paths)
         return stderr;
     }
 
+    /// <summary>Listet die Mikrofone (Windows/DirectShow). Liefert eine leere Liste, wenn es keine gibt.</summary>
+    public async Task<IReadOnlyList<Audio.RecordingDevice>> ListRecordingDevicesAsync(CancellationToken token = default)
+    {
+        using var process = Start(Paths.Ffmpeg, Audio.RecordingDevice.ListArguments, redirectInput: false);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var stderr = await process.StandardError.ReadToEndAsync(token).ConfigureAwait(false);
+        await process.WaitForExitAsync(token).ConfigureAwait(false);
+        await stdoutTask.ConfigureAwait(false);
+        return Audio.RecordingDevice.ParseDirectShowList(stderr);
+    }
+
+    /// <summary>Startet eine Aufnahme (läuft, bis <see cref="FfmpegRecording.StopAsync"/> aufgerufen wird).</summary>
+    public FfmpegRecording StartRecording(Audio.RecordingDevice device, string outputPath) =>
+        new(Start(Paths.Ffmpeg, device.Arguments(outputPath), redirectInput: true), outputPath);
+
     /// <summary>Liest die Ausgabe von <c>ffmpeg -hide_banner -encoders</c> (für Hardware-Encoder-Erkennung).</summary>
     public Task<string> ListEncodersAsync(CancellationToken token = default) =>
         RunForTextAsync(Paths.Ffmpeg, ["-hide_banner", "-encoders"], token);
