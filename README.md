@@ -7,7 +7,7 @@ Es ist auf Material der **Canon EOS R6 Mark II** und der **Canon EOS 70D** zuges
 professionelle Videos machen: vom Import der Speicherkarte über den Schnitt bis zum Export als
 H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 
-> **Stand: Sprint 4 von 9 abgeschlossen.** Import, Medienpool, Schnitt, Wiedergabe und Proxys funktionieren.
+> **Stand: Sprint 4 von 16 abgeschlossen.** Import, Medienpool, Schnitt, Wiedergabe und Proxys funktionieren.
 > Als Nächstes folgt der Export-Dialog (dann ist Version 0.5 die erste voll nutzbare Version). Den kompletten Plan findest du in
 > **[docs/SPRINTS.md](docs/SPRINTS.md)**.
 
