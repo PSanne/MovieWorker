@@ -15,7 +15,7 @@ if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
 if (Test-Path $logPath) {
     Get-Content $logPath | ForEach-Object {
         Write-Host $_
-        if ($_ -like 'FEHLER*') { Write-Host "::error::$_" }
+        if ($_ -like '*FEHLER*') { Write-Host "::error::$_" }
     }
 } else {
     Write-Host '::error::Der Selbsttest hat kein Protokoll geschrieben (Absturz beim Start?).'
