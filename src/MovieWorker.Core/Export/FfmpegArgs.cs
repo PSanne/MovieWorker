@@ -21,13 +21,16 @@ public static class FfmpegArgs
         return $"'{p}'";
     }
 
+    /// <summary>Tone-Mapping von HDR (PQ/HLG) nach SDR Rec.709.</summary>
+    public const string HdrToSdrFilter =
+        "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv";
+
     /// <summary>Filter, der die Farben eines Clips nach Rec.709 bringt (leer, wenn nichts zu tun ist).</summary>
     public static string? ColorFilter(TimelineClip clip) => clip.ColorTransform switch
     {
         ColorTransform.Lut when !string.IsNullOrWhiteSpace(clip.LutPath) =>
             $"lut3d=file={EscapeFilterPath(clip.LutPath!)}:interp=tetrahedral",
-        ColorTransform.HdrToSdr =>
-            "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv",
+        ColorTransform.HdrToSdr => HdrToSdrFilter,
         _ => null,
     };
 

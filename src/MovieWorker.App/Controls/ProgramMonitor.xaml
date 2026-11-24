@@ -1,0 +1,29 @@
+<UserControl x:Class="MovieWorker.App.Controls.ProgramMonitor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="True">
+    <DockPanel Background="#151517">
+        <DockPanel DockPanel.Dock="Top" Background="#25262A" Height="26">
+            <TextBlock DockPanel.Dock="Right" x:Name="TimecodeText" Foreground="#FFD24A" FontFamily="Consolas" FontSize="14"
+                       VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock Text="Programm (Timeline)" Foreground="#DDD" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0" />
+        </DockPanel>
+        <DockPanel DockPanel.Dock="Bottom" Background="#25262A" Height="34">
+            <TextBlock DockPanel.Dock="Right" x:Name="ShuttleText" Foreground="#AAA" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button Content="⏮" Width="34" Margin="2" ToolTip="Zum Anfang (Pos1)" Click="OnStart" />
+                <Button Content="◀◀" Width="40" Margin="2" ToolTip="Rückwärts (J)" Click="OnReverse" />
+                <Button x:Name="PlayButton" Content="▶" Width="48" Margin="2" ToolTip="Abspielen/Pause (Leertaste)" Click="OnPlay" />
+                <Button Content="▶▶" Width="40" Margin="2" ToolTip="Schneller vorwärts (L)" Click="OnForward" />
+                <Button Content="⏭" Width="34" Margin="2" ToolTip="Zum Ende (Ende)" Click="OnEnd" />
+            </StackPanel>
+        </DockPanel>
+        <Grid x:Name="Screen" Background="Black" ClipToBounds="True">
+            <MediaElement x:Name="Video" LoadedBehavior="Manual" UnloadedBehavior="Manual" Stretch="Uniform"
+                          MediaOpened="OnMediaOpened" MediaFailed="OnMediaFailed" Visibility="Hidden" />
+            <Image x:Name="Still" Stretch="Uniform" />
+            <TextBlock x:Name="Message" Foreground="#888" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Text="Die Timeline ist leer." />
+        </Grid>
+    </DockPanel>
+</UserControl>

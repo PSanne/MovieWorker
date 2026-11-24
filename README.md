@@ -7,8 +7,8 @@ Es ist auf Material der **Canon EOS R6 Mark II** und der **Canon EOS 70D** zuges
 professionelle Videos machen: vom Import der Speicherkarte über den Schnitt bis zum Export als
 H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 
-> **Stand: Sprint 3 von 9 abgeschlossen.** Import, Medienpool und Schnitt in der Timeline funktionieren.
-> Als Nächstes folgen Wiedergabe/Vorschau und der Export-Dialog. Den kompletten Plan findest du in
+> **Stand: Sprint 4 von 9 abgeschlossen.** Import, Medienpool, Schnitt, Wiedergabe und Proxys funktionieren.
+> Als Nächstes folgt der Export-Dialog (dann ist Version 0.5 die erste voll nutzbare Version). Den kompletten Plan findest du in
 > **[docs/SPRINTS.md](docs/SPRINTS.md)**.
 
 ## Was MovieWorker über deine Kameras weiß
@@ -32,18 +32,22 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | **Medienpool** | Vorschaubild, Länge, Kamera, Kennzeichen für Canon Log 3 / HDR / Zeitlupe · Inspektor mit technischen Daten, Hinweisen und Kamera-Tipps · Kamera von Hand festlegen |
 | **Timeline** | Clips per Doppelklick oder Ziehen aus dem Medienpool einfügen · verschieben (auch auf andere Spuren), an den Rändern trimmen · Einrasten an Schnittpunkten, Abspielkopf und Marken · Vorschaubilder und Ton-Wellenform in den Clips · Spuren hinzufügen und stummschalten |
 | **Clip-Inspektor** | Position und Länge als Timecode · Geschwindigkeit (Zeitlupe/Zeitraffer) · „Als Zeitlupe abspielen“ für 150/180-fps-Clips · Lautstärke, Ton stumm, Ein-/Ausblenden |
+| **Monitore** | *Quelle*: Aufnahme ansehen, In/Out setzen, Ausschnitt ans Ende oder am Abspielkopf einfügen · *Programm*: Timeline abspielen; im Stillstand exaktes Standbild mit LUT/HDR-Umrechnung wie im Export · J/K/L-Shuttle |
+| **Proxys** | Für Aufnahmen, die Windows nicht flüssig abspielt (4K-HEVC 10 Bit 4:2:2, HDR, MOV mit LPCM), entsteht automatisch eine Vorschaudatei: 70D-Clips werden nur neu verpackt (Sekunden), R6-HEVC wird als 540p-H.264 kodiert, HDR dabei nach SDR umgerechnet · geteilte Aufnahmen ergeben einen Proxy · Menü *Wiedergabe → Vorschau mit Proxys* schaltet aufs Original um · der Export nutzt immer die Originale |
 | **Projekte** | Neu, Öffnen, Speichern (`.mvproj`), zuletzt geöffnete Projekte · Projekteinstellungen (Auflösung, Bildrate, Drop-Frame) · der erste Videoclip bestimmt die Einstellungen eines leeren Projekts |
 
 ### Tastenkürzel
 
 | Aktion | Taste |
 |---|---|
+| Abspielen / Pause | Leertaste (im Quellmonitor: dessen Wiedergabe) |
+| Rückwärts / Stopp / Vorwärts | J / K / L (mehrfach drücken = schneller) |
 | Bild vor / zurück | → / ← (mit Umschalt: 1 Sekunde) |
 | Zum nächsten / vorigen Schnitt | ↓ / ↑ |
 | Anfang / Ende | Pos1 / Ende |
 | Am Abspielkopf teilen | Strg+B (oder Strg+K) |
 | Clip löschen / Lücke schließen | Entf / Umschalt+Entf |
-| In- / Out-Marke, Marken entfernen | I / O, Strg+Umschalt+X |
+| In- / Out-Marke, Marken entfernen | I / O, Strg+Umschalt+X (im Quellmonitor: In/Out der Aufnahme) |
 | Einrasten an/aus | N |
 | Zoomen | Strg+Mausrad, + / −, Umschalt+Z = ganze Timeline |
 | Waagerecht scrollen | Mausrad über der Timeline |
@@ -95,10 +99,11 @@ MovieWorker.sln
 │     ├─ Camera/                 Canon-Profile, Kamera-Erkennung, 4-GB-Aufteilung, Kartenscan
 │     ├─ Timeline/               Projekt, Spuren, Clips, Schnitt-Operationen, Rückgängig
 │     ├─ Export/                 Export-Vorlagen, ffmpeg-Befehle (Export, Proxy, Vorschaubild)
+│     ├─ Preview/                Proxy-Planung, Wiedergabe-Planung (was läuft wann)
 │     ├─ Projects/               Projektdateien (.mvproj), Medienpool, Import
 │     └─ Settings/               Einstellungen (%AppData%\MovieWorker)
 │  └─ MovieWorker.App/           WPF-Anwendung (MVVM, CommunityToolkit.Mvvm)
-│     ├─ Controls/               Timeline-Ansicht
+│     ├─ Controls/               Timeline-Ansicht, Quell- und Programmmonitor
 │     ├─ ViewModels/             Hauptfenster, Medienpool, Clip-Inspektor, Dialoge
 │     ├─ Views/                  Karten-Import, Projekteinstellungen
 │     ├─ Services/               Dialoge, Einstellungen, FFmpeg, Vorschaubilder, Wellenformen
@@ -126,6 +131,12 @@ einzigen ffmpeg-Aufruf übersetzt, jeder Clip wird per schnellem Seek nur so wei
 - **Der Medienpool ist nicht Teil von Rückgängig.** Strg+Z nimmt Schnitte zurück, aber keine Importe – sonst
   würden importierte Aufnahmen beim Zurücknehmen eines Schnitts verschwinden.
 - **Schnelle Reglerbewegungen ergeben einen einzigen Rückgängig-Schritt** (z. B. Lautstärke ziehen).
+- **Vorschau: Uhr statt Player als Taktgeber.** Beim Abspielen gibt eine Stoppuhr die Zeit vor, der Windows-Player
+  wird nachgeführt. So stimmt die Position auch bei Lücken, Spurwechseln und Dateien, die Windows nicht abspielen
+  kann (dann zeigt der Monitor Standbilder). Im Stillstand rechnet ffmpeg ein exaktes Bild – mit derselben
+  Farbumrechnung wie der Export.
+- **Proxys nur, wo nötig.** MP4 mit H.264 spielt Windows direkt; 70D-MOVs werden nur neu verpackt, nur HEVC/10 Bit/HDR
+  wird neu kodiert. Proxys liegen in `%LocalAppData%\MovieWorker\Proxys` und werden nie exportiert.
 - **Canon Log 3 wird über die Bit-Tiefe erkannt:** Die R6 Mark II nimmt 10 Bit nur mit Canon Log 3 oder HDR PQ auf;
   HDR PQ ist in den Metadaten markiert, also ist 10 Bit ohne PQ-Kennzeichen Canon Log 3.
 

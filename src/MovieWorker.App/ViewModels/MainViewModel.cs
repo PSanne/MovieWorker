@@ -28,9 +28,12 @@ public sealed partial class MainViewModel : ObservableObject
         _settings = settings;
         _tools = tools;
         _thumbnails = thumbnails;
-        Waveforms = new WaveformService(tools);
         Editor = new TimelineEditor();
         Editor.Changed += OnEditorChanged;
+        Waveforms = new WaveformService(tools);
+        Proxies = new ProxyService(tools, settings);
+        Proxies.ProxyFinished += (_, _) => Editor.NotifyMediaChanged();
+        MediaItem.UseProxies = settings.Settings.UseProxies;
         RefreshRecentProjects();
         StatusText = tools.IsAvailable ? "Bereit." : tools.StatusText;
     }
@@ -46,6 +49,33 @@ public sealed partial class MainViewModel : ObservableObject
     public ThumbnailService Thumbnails => _thumbnails;
 
     public WaveformService Waveforms { get; }
+
+    public ProxyService Proxies { get; }
+
+    /// <summary>Vorschau mit Proxys (statt Originalen).</summary>
+    public bool UseProxies
+    {
+        get => _settings.Settings.UseProxies;
+        set
+        {
+            _settings.Settings.UseProxies = value;
+            MediaItem.UseProxies = value;
+            _settings.Save();
+            OnPropertyChanged();
+            Editor.NotifyMediaChanged();
+        }
+    }
+
+    public bool AutoCreateProxies
+    {
+        get => _settings.Settings.AutoCreateProxies;
+        set
+        {
+            _settings.Settings.AutoCreateProxies = value;
+            _settings.Save();
+            OnPropertyChanged();
+        }
+    }
 
     public ObservableCollection<MediaItemViewModel> MediaItems { get; } = [];
 
@@ -306,6 +336,11 @@ public sealed partial class MainViewModel : ObservableObject
             var viewModels = added.Select(AddMediaViewModel).ToList();
             SelectedMedia = viewModels.FirstOrDefault() ?? SelectedMedia;
 
+            if (_settings.Settings.AutoCreateProxies)
+            {
+                _ = CreateProxiesAsync(viewModels.Where(v => Proxies.NeedsProxy(v)).ToList());
+            }
+
             var skipped = result.Items.Count - added.Count;
             StatusText = $"{added.Count} Aufnahme(n) importiert" + (skipped > 0 ? $", {skipped} waren schon im Projekt" : string.Empty) + ".";
             if (result.Failed.Count > 0)
@@ -319,6 +354,43 @@ public sealed partial class MainViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedMedia))]
+    private async Task CreateProxyForSelectedAsync()
+    {
+        if (SelectedMedia is { } item)
+        {
+            await CreateProxiesAsync([item], force: true);
+        }
+    }
+
+    [RelayCommand]
+    private async Task CreateAllProxiesAsync() =>
+        await CreateProxiesAsync(MediaItems.Where(m => Proxies.NeedsProxy(m)).ToList());
+
+    /// <summary>Erstellt Proxys nacheinander im Hintergrund; Fehler landen in der Statuszeile.</summary>
+    public async Task CreateProxiesAsync(IReadOnlyList<MediaItemViewModel> items, bool force = false)
+    {
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            StatusText = $"Proxy {i + 1}/{items.Count}: {item.Name} …";
+            try
+            {
+                await Proxies.CreateAsync(item, force);
+            }
+            catch (Exception ex) when (ex is Core.Media.FfmpegException or IOException or InvalidOperationException)
+            {
+                StatusText = $"Proxy für {item.Name} fehlgeschlagen: {ex.Message}";
+                return;
+            }
+        }
+
+        if (items.Count > 0)
+        {
+            StatusText = items.Count == 1 ? "Proxy fertig." : $"{items.Count} Proxys fertig.";
         }
     }
 
@@ -364,6 +436,25 @@ public sealed partial class MainViewModel : ObservableObject
         SelectedClipId = clip.Id;
         StatusText = $"„{media.Name}“ in {track.Name} eingefügt.";
         return clip;
+    }
+
+    /// <summary>Fügt einen Ausschnitt am Abspielkopf ein (nur, wenn dort auf der Spur Platz ist).</summary>
+    public bool InsertRangeAtPlayhead(MediaItem media, double sourceIn, double? sourceOut)
+    {
+        AdoptSettingsIfFirstClip(media);
+        var track = media.IsAudioOnly ? Project.AudioTracks.First() : Project.VideoTracks.First();
+        var clip = Editor.CreateClip(media, sourceIn, sourceOut);
+        ApplyDefaultColor(clip, media);
+        if (Editor.Insert(track, clip, PlayheadFrame))
+        {
+            SelectedClipId = clip.Id;
+            PlayheadFrame = clip.EndFrame;
+            StatusText = $"„{media.Name}“ am Abspielkopf eingefügt.";
+            return true;
+        }
+
+        StatusText = "Am Abspielkopf ist auf der Spur kein Platz – nutze „Ans Ende“ oder schaffe eine Lücke.";
+        return false;
     }
 
     /// <summary>Weist Log-Clips die Standard-LUT zu (falls in den Einstellungen festgelegt).</summary>

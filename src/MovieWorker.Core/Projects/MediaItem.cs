@@ -46,9 +46,12 @@ public sealed class MediaItem
     [JsonIgnore]
     public bool HasProxy => !string.IsNullOrEmpty(ProxyPath) && File.Exists(ProxyPath);
 
-    /// <summary>Datei für die Vorschau: Proxy, falls vorhanden, sonst das Original.</summary>
+    /// <summary>Datei für die Vorschau: Proxy, falls vorhanden (und erlaubt), sonst das Original.</summary>
     [JsonIgnore]
-    public string PreviewPath => HasProxy ? ProxyPath! : PrimaryPath;
+    public string PreviewPath => HasProxy && UseProxies ? ProxyPath! : PrimaryPath;
+
+    /// <summary>Vorschau mit Proxys (Einstellung für alle Aufnahmen, wird von der App gesetzt).</summary>
+    public static bool UseProxies { get; set; } = true;
 
     public static MediaItem FromRecording(RecordingGroup recording) => new()
     {

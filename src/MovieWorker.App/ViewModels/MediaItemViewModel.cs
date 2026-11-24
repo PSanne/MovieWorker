@@ -78,7 +78,23 @@ public sealed partial class MediaItemViewModel : ObservableObject
 
     public string CreatedText => Model.First.CreationTime is { } c ? c.LocalDateTime.ToString("g") : "unbekannt";
 
-    public string ProxyText => Model.HasProxy ? "Proxy vorhanden" : "kein Proxy";
+    public string ProxyText => Model.HasProxy
+        ? "vorhanden"
+        : Core.Preview.ProxyPlanner.Decide(Model) switch
+        {
+            Core.Preview.ProxyKind.None => "nicht nötig (spielt direkt)",
+            Core.Preview.ProxyKind.Remux => "empfohlen (schnell erstellt)",
+            _ => "empfohlen für flüssige Vorschau",
+        };
+
+    public bool HasProxy => Model.HasProxy;
+
+    /// <summary>Im Quellmonitor gesetzte In-/Out-Punkte (Sekunden, nur für diese Sitzung).</summary>
+    [ObservableProperty]
+    private double? _sourceIn;
+
+    [ObservableProperty]
+    private double? _sourceOut;
 
     public IReadOnlyList<string> CameraTips => CanonCameraProfile.For(Detection.Camera)?.EditingTips ?? [];
 

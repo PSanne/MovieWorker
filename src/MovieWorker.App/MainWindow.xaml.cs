@@ -14,7 +14,6 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private bool _allowClose;
-    private CancellationTokenSource? _previewCts;
     private Point _mediaDragStart;
     private bool _firstLayout = true;
 
@@ -39,11 +38,19 @@ public partial class MainWindow : Window
         Timeline.ClipDoubleClicked += (_, _) => ClipTab.IsSelected = true;
         Timeline.ViewChanged += (_, _) => SyncScrollBar();
         Loaded += (_, _) => SyncScrollBar();
+        SourceMonitor.Attach(viewModel);
+        ProgramMonitor.Attach(viewModel);
 
         UpdateEmptyHint();
     }
 
     public TimelineView TimelineControl => Timeline;
+
+    public ProgramMonitor ProgramMonitorControl => ProgramMonitor;
+
+    public SourceMonitor SourceMonitorControl => SourceMonitor;
+
+    private void OnPlayPause(object sender, RoutedEventArgs e) => ProgramMonitor.TogglePlay();
 
     protected override async void OnClosing(CancelEventArgs e)
     {
@@ -85,8 +92,21 @@ public partial class MainWindow : Window
         var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var handled = true;
+        var sourceFocused = SourceMonitor.IsKeyboardFocusWithin;
         switch (e.Key)
         {
+            case Key.Space:
+                if (sourceFocused) SourceMonitor.TogglePlay(); else ProgramMonitor.TogglePlay();
+                break;
+            case Key.J when !ctrl:
+                ProgramMonitor.Shuttle(-1);
+                break;
+            case Key.K when !ctrl:
+                ProgramMonitor.Shuttle(0);
+                break;
+            case Key.L when !ctrl:
+                ProgramMonitor.Shuttle(1);
+                break;
             case Key.Left when !listFocused:
                 if (shift) _viewModel.StepSeconds(-1); else _viewModel.StepFrames(-1);
                 break;
@@ -112,10 +132,10 @@ public partial class MainWindow : Window
                 if (shift) _viewModel.RippleDeleteSelectedClip(); else _viewModel.DeleteSelectedClip();
                 break;
             case Key.I when !ctrl:
-                _viewModel.MarkIn();
+                if (sourceFocused) SourceMonitor.MarkIn(); else _viewModel.MarkIn();
                 break;
             case Key.O when !ctrl:
-                _viewModel.MarkOut();
+                if (sourceFocused) SourceMonitor.MarkOut(); else _viewModel.MarkOut();
                 break;
             case Key.X when ctrl && shift:
                 _viewModel.ClearMarks();
@@ -141,6 +161,11 @@ public partial class MainWindow : Window
         if (handled)
         {
             e.Handled = true;
+            if (e.Key is not (Key.Space or Key.J or Key.K or Key.L) && ProgramMonitor.IsPlaying)
+            {
+                ProgramMonitor.Pause();
+            }
+
             Timeline.FollowPlayhead();
         }
     }
@@ -275,53 +300,12 @@ public partial class MainWindow : Window
     {
         switch (e.PropertyName)
         {
-            case nameof(MainViewModel.SelectedMedia):
-                _ = ShowPreviewAsync();
-                if (_viewModel.SelectedMedia is not null && !ClipTab.IsSelected)
-                {
-                    break;
-                }
-
-                break;
             case nameof(MainViewModel.SelectedClip) when _viewModel.SelectedClip is not null:
                 ClipTab.IsSelected = true;
                 break;
             case nameof(MainViewModel.PlayheadFrame):
                 Timeline.FollowPlayhead();
                 break;
-        }
-    }
-
-    private async Task ShowPreviewAsync()
-    {
-        _previewCts?.Cancel();
-        _previewCts = new CancellationTokenSource();
-        var token = _previewCts.Token;
-        PreviewImage.Source = null;
-        var media = _viewModel.SelectedMedia;
-        PreviewHint.Text = media is null ? "Wähle eine Aufnahme im Medienpool." : media.IsAudioOnly ? "♪ Audiodatei" : "Vorschau wird geladen …";
-        PreviewHint.Visibility = Visibility.Visible;
-        if (media is null || media.IsAudioOnly)
-        {
-            return;
-        }
-
-        try
-        {
-            var seconds = Math.Min(1.0, media.Model.Duration.TotalSeconds / 2);
-            var image = await _viewModel.Thumbnails.RenderAsync(media.Model.PreviewPath, seconds, 540, null, token);
-            if (!token.IsCancellationRequested)
-            {
-                PreviewImage.Source = image;
-                PreviewHint.Visibility = image is null ? Visibility.Visible : Visibility.Collapsed;
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception)
-        {
-            PreviewHint.Text = "Keine Vorschau möglich.";
         }
     }
 

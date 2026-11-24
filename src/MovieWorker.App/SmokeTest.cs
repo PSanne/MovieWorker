@@ -112,6 +112,8 @@ public static class SmokeTest
         var tools = new MediaToolsService(settings);
         c.Check(tools.IsAvailable, "FFmpeg gefunden (" + tools.StatusText + ")");
 
+        settings.Settings.ProxyFolder = Path.Combine(c.Temp, "Proxys");
+        settings.Settings.AutoCreateProxies = false; // Proxys erzeugt der Test gezielt weiter unten
         var vm = new MainViewModel(dialogs, settings, tools, new ThumbnailService(tools));
         var window = new MainWindow(vm);
         Application.Current.MainWindow = window;
@@ -198,6 +200,47 @@ public static class SmokeTest
         SaveScreenshot(window, Path.Combine(c.OutputFolder, "timeline.png"));
         clipCount = vm.Project.AllClips.Count();
 
+        // ---- Proxys
+        var needProxy = vm.MediaItems.Where(m => vm.Proxies.NeedsProxy(m)).ToList();
+        c.Check(needProxy.Any(m => m.Detection.Camera == CanonCamera.EosR6MarkII), "R6-HEVC braucht einen Proxy");
+        await vm.CreateProxiesAsync(needProxy);
+        c.Check(needProxy.All(m => m.Model.HasProxy), $"{needProxy.Count} Proxys erstellt");
+
+        // ---- Programmmonitor: Standbild und Wiedergabe
+        var program = window.ProgramMonitorControl;
+        vm.PlayheadFrame = 5;
+        c.Check(await program.RenderStillNowAsync(), "Standbild im Programmmonitor (mit Farbumrechnung)");
+        var before = vm.PlayheadFrame;
+        program.Play(1);
+        await Settle(1200);
+        program.Pause();
+        c.Check(vm.PlayheadFrame > before + 5, $"Wiedergabe läuft (Abspielkopf {before} → {vm.PlayheadFrame})");
+        program.Shuttle(1);
+        program.Shuttle(1);
+        await Settle(500);
+        program.Shuttle(0);
+        c.Check(!program.IsPlaying, "J/K/L-Shuttle hält mit K an");
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "monitore.png"));
+
+        // ---- Quellmonitor: Ausschnitt wählen und einfügen
+        vm.SelectedMedia = by70D;
+        await Settle(500);
+        var source = window.SourceMonitorControl;
+        source.SetPosition(1);
+        source.MarkIn();
+        source.SetPosition(3);
+        source.MarkOut();
+        c.Check(by70D!.SourceIn == 1 && by70D.SourceOut == 3, "In/Out im Quellmonitor");
+        var clipsBefore = vm.Project.AllClips.Count();
+        var appended = vm.AddToTimeline(by70D.Model, by70D.SourceIn ?? 0, by70D.SourceOut);
+        c.Check(vm.Project.AllClips.Count() == clipsBefore + 1 && appended.LengthFrames == 2 * vm.Project.Settings.FrameRate.NominalFps,
+            "Ausschnitt (2 s) ans Ende angehängt");
+        source.TogglePlay();
+        await Settle(600);
+        source.TogglePlay();
+        c.Check(source.PositionSeconds > 1, "Quellmonitor spielt ab");
+        clipCount = vm.Project.AllClips.Count();
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");
@@ -205,6 +248,7 @@ public static class SmokeTest
         c.Check(!vm.Project.AllClips.Any() && vm.MediaItems.Count == 0, "Neues leeres Projekt");
         await vm.OpenProjectFileAsync(projectFile);
         c.Check(vm.Project.AllClips.Count() == clipCount && vm.MediaItems.Count == imported.Count, "Projekt wieder geladen");
+        c.Check(vm.MediaItems.Count(m => m.Model.HasProxy) == needProxy.Count, "Proxys bleiben im Projekt gespeichert");
         c.Check(settings.Settings.RecentProjects.Contains(projectFile), "Zuletzt geöffnet gemerkt");
 
         // ---- Karten-Import (kopieren + Prüfsumme)

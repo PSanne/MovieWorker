@@ -9,8 +9,8 @@ dann sichtbare Bedienung, dann Profi-Funktionen.
 | 1 | Fundament & Kern | Plattformunabhängiger Kern mit Canon-Erkennung, Timeline und Export | ✅ fertig |
 | 2 | App-Grundgerüst & Import | Windows-App, Speicherkarte importieren, Medienpool | ✅ fertig |
 | 3 | Timeline-Oberfläche | Schneiden mit der Maus | ✅ fertig |
-| 4 | Vorschau & Proxys | Abspielen, Quell- und Programmmonitor | ⏳ als Nächstes |
-| 5 | Export-Dialog | Fertige Filme ausgeben (→ erste nutzbare Version 0.5) | offen |
+| 4 | Vorschau & Proxys | Abspielen, Quell- und Programmmonitor | ✅ fertig |
+| 5 | Export-Dialog | Fertige Filme ausgeben (→ erste nutzbare Version 0.5) | ⏳ als Nächstes |
 | 6 | Farbe & Canon-Look | Canon Log 3, HDR, Farbkorrektur, Messinstrumente | offen |
 | 7 | Ton | Pegel, Lautheit, Ducking, externen Ton anlegen | offen |
 | 8 | Übergänge, Titel & Mehrspur | Blenden, Texte, B-Roll, Stabilisierung | offen |
@@ -47,11 +47,12 @@ dann sichtbare Bedienung, dann Profi-Funktionen.
 - Tastenkürzel nach Branchenstandard: I/O, Pfeiltasten bildweise, Strg+B (J/K/L folgt mit der Wiedergabe in Sprint 4)
 - Clip-Inspektor: Geschwindigkeit, Zeitlupe konformieren, Lautstärke, Blenden; Spuren hinzufügen und stummschalten
 
-## Sprint 4 – Vorschau & Proxys
+## Sprint 4 – Vorschau & Proxys ✅
 - Quellmonitor mit In-/Out-Punkten und „In Timeline einfügen“
 - Programmmonitor: Wiedergabe der Timeline, bildgenaues Scrubbing
 - Proxys im Hintergrund erzeugen (4K-HEVC → 540p H.264), automatisch beim Import möglich
 - Umschalten Proxy ↔ Original, Vorschau mit LUT/Tone-Mapping
+- J/K/L-Shuttle (rückwärts, Stopp, vorwärts bis 8×), Leertaste spielt ab
 
 ## Sprint 5 – Export-Dialog (→ Version 0.5, erste nutzbare Version)
 - Export-Dialog mit Vorlagen, Zielordner, Fortschritt, Restzeit, Abbrechen

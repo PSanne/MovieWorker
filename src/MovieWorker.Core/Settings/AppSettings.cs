@@ -22,8 +22,18 @@ public sealed class AppSettings
     /// <summary>Kopierte Dateien per SHA-256-Prüfsumme kontrollieren.</summary>
     public bool ImportVerifyChecksums { get; set; } = true;
 
-    /// <summary>Für 4K-HEVC-Material beim Import automatisch Proxys erzeugen.</summary>
+    /// <summary>Beim Import automatisch Proxys für Aufnahmen erzeugen, die Windows nicht flüssig abspielt.</summary>
     public bool AutoCreateProxies { get; set; } = true;
+
+    /// <summary>Vorschau mit Proxys statt Originalen.</summary>
+    public bool UseProxies { get; set; } = true;
+
+    /// <summary>Ordner für Proxys (leer = %LocalAppData%\MovieWorker\Proxys).</summary>
+    public string? ProxyFolder { get; set; }
+
+    public string EffectiveProxyFolder => string.IsNullOrWhiteSpace(ProxyFolder)
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MovieWorker", "Proxys")
+        : ProxyFolder;
 
     /// <summary>Ordner mit LUT-Dateien (.cube).</summary>
     public string? LutFolder { get; set; }

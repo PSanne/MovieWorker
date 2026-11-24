@@ -54,6 +54,15 @@
                 <MenuItem Header="Videospur hinzufügen" Command="{Binding AddVideoTrackCommand}" />
                 <MenuItem Header="Tonspur hinzufügen" Command="{Binding AddAudioTrackCommand}" />
             </MenuItem>
+            <MenuItem Header="_Wiedergabe">
+                <MenuItem Header="Abspielen / Pause" InputGestureText="Leertaste" Click="OnPlayPause" />
+                <MenuItem Header="Rückwärts / Stopp / Vorwärts" InputGestureText="J / K / L" IsEnabled="False" />
+                <Separator />
+                <MenuItem Header="Vorschau mit _Proxys" IsCheckable="True" IsChecked="{Binding UseProxies}" />
+                <MenuItem Header="Proxys beim Import _automatisch erstellen" IsCheckable="True" IsChecked="{Binding AutoCreateProxies}" />
+                <MenuItem Header="Proxy für Auswahl erstellen" Command="{Binding CreateProxyForSelectedCommand}" />
+                <MenuItem Header="Alle fehlenden Proxys erstellen" Command="{Binding CreateAllProxiesCommand}" />
+            </MenuItem>
             <MenuItem Header="_Extras">
                 <MenuItem Header="_FFmpeg-Ordner festlegen …" Command="{Binding SetFfmpegFolderCommand}" />
             </MenuItem>
@@ -112,6 +121,8 @@
                 <TextBlock DockPanel.Dock="Top" Margin="8,6" FontWeight="SemiBold" Text="Medienpool" />
                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="6">
                     <Button Content="In Timeline einfügen" Padding="8,2" Command="{Binding AddSelectedToTimelineCommand}" />
+                    <Button Content="Proxy" Padding="8,2" Margin="6,0,0,0" ToolTip="Proxy für flüssige Vorschau erstellen"
+                            Command="{Binding CreateProxyForSelectedCommand}" />
                     <Button Content="Entfernen" Padding="8,2" Margin="6,0,0,0" Command="{Binding RemoveSelectedMediaCommand}" />
                 </StackPanel>
                 <Grid>
@@ -147,7 +158,13 @@
                                                     Visibility="{Binding IsHighFrameRate, Converter={StaticResource BoolToVisibility}}">
                                                 <TextBlock Text="Zeitlupe" FontSize="10" Foreground="#24489A" />
                                             </Border>
+                                            <Border Style="{StaticResource Badge}" Background="#DFF3E4"
+                                                    Visibility="{Binding HasProxy, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="Proxy" FontSize="10" Foreground="#1E6B35" />
+                                            </Border>
                                         </WrapPanel>
+                                        <ProgressBar Height="4" Maximum="1" Value="{Binding ProxyProgress}" Margin="0,3,0,0"
+                                                     Visibility="{Binding IsProxyRunning, Converter={StaticResource BoolToVisibility}}" />
                                     </StackPanel>
                                 </Grid>
                             </DataTemplate>
@@ -162,13 +179,16 @@
             <GridSplitter Grid.Row="0" Grid.Column="1" Width="5" HorizontalAlignment="Stretch" />
 
             <!-- Monitore -->
-            <Border Grid.Row="0" Grid.Column="2" x:Name="MonitorHost" Background="#111">
-                <Grid>
-                    <Image x:Name="PreviewImage" Stretch="Uniform" Margin="8" />
-                    <TextBlock x:Name="PreviewHint" Text="Wähle eine Aufnahme im Medienpool." Foreground="#888"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Grid>
-            </Border>
+            <Grid Grid.Row="0" Grid.Column="2" x:Name="MonitorHost" Background="#111">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="4" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <c:SourceMonitor x:Name="SourceMonitor" Grid.Column="0" />
+                <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="#333" />
+                <c:ProgramMonitor x:Name="ProgramMonitor" Grid.Column="2" />
+            </Grid>
 
             <GridSplitter Grid.Row="0" Grid.Column="3" Width="5" HorizontalAlignment="Stretch" />
 

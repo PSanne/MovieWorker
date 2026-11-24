@@ -1,0 +1,41 @@
+<UserControl x:Class="MovieWorker.App.Controls.SourceMonitor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="True">
+    <DockPanel Background="#151517">
+        <DockPanel DockPanel.Dock="Top" Background="#25262A" Height="26">
+            <TextBlock DockPanel.Dock="Right" x:Name="TimecodeText" Foreground="#7FC8FF" FontFamily="Consolas" FontSize="14"
+                       VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock x:Name="TitleText" Text="Quelle" Foreground="#DDD" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0"
+                       TextTrimming="CharacterEllipsis" />
+        </DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Background="#25262A">
+            <Grid Margin="6,4,6,0">
+                <Slider x:Name="Position" Minimum="0" Maximum="1" ValueChanged="OnSliderChanged" IsMoveToPointEnabled="True" />
+                <Canvas x:Name="RangeCanvas" IsHitTestVisible="False" Height="6" VerticalAlignment="Bottom">
+                    <Rectangle x:Name="RangeBar" Height="4" Fill="#7FB8FF" Canvas.Top="1" />
+                </Canvas>
+            </Grid>
+            <DockPanel Height="32">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,0,4,0">
+                    <Button Content="Ans Ende" Margin="2" Padding="6,0" ToolTip="Ausschnitt ans Ende der Timeline anhängen" Click="OnAppend" />
+                    <Button Content="Am Abspielkopf" Margin="2" Padding="6,0" ToolTip="Ausschnitt am Abspielkopf einfügen (falls dort Platz ist)" Click="OnInsert" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="▶" x:Name="PlayButton" Width="40" Margin="2" Click="OnPlay" />
+                    <Button Content="In" Width="34" Margin="2" ToolTip="In-Punkt setzen" Click="OnMarkIn" />
+                    <Button Content="Out" Width="34" Margin="2" ToolTip="Out-Punkt setzen" Click="OnMarkOut" />
+                    <Button Content="✕" Width="26" Margin="2" ToolTip="In/Out löschen" Click="OnClear" />
+                    <TextBlock x:Name="RangeText" Foreground="#AAA" VerticalAlignment="Center" Margin="6,0" />
+                </StackPanel>
+            </DockPanel>
+        </StackPanel>
+        <Grid x:Name="Screen" Background="Black" ClipToBounds="True">
+            <MediaElement x:Name="Video" LoadedBehavior="Manual" UnloadedBehavior="Manual" Stretch="Uniform" ScrubbingEnabled="False"
+                          MediaOpened="OnMediaOpened" MediaFailed="OnMediaFailed" MediaEnded="OnMediaEnded" Visibility="Hidden" />
+            <Image x:Name="Still" Stretch="Uniform" />
+            <TextBlock x:Name="Message" Foreground="#888" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Text="Wähle eine Aufnahme im Medienpool." Margin="10" />
+        </Grid>
+    </DockPanel>
+</UserControl>
