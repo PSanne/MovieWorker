@@ -52,6 +52,9 @@ public partial class ProgramMonitor : UserControl
 
     public bool IsPlaying { get; private set; }
 
+    /// <summary>Ein exaktes Standbild wurde angezeigt (z. B. für die Messinstrumente).</summary>
+    public event EventHandler? StillRendered;
+
     /// <summary>Anzahl fertig gerenderter Standbilder (für den Selbsttest).</summary>
     public int StillsRendered { get; private set; }
 
@@ -444,6 +447,7 @@ public partial class ProgramMonitor : UserControl
             Video.Visibility = Visibility.Hidden;
             Message.Text = image is null ? "Kein Bild." : string.Empty;
             StillsRendered++;
+            StillRendered?.Invoke(this, EventArgs.Empty);
             return image is not null;
         }
         catch (OperationCanceledException)

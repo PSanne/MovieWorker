@@ -16,10 +16,12 @@ public sealed partial class ClipViewModel : ObservableObject
 {
     private readonly TimelineEditor _editor;
 
-    public ClipViewModel(TimelineEditor editor, Guid clipId, Func<long>? playhead = null, Action<long>? setPlayhead = null)
+    public ClipViewModel(TimelineEditor editor, Guid clipId, Func<long>? playhead = null, Action<long>? setPlayhead = null,
+        Func<IReadOnlyList<string>>? lutFiles = null)
     {
         _editor = editor;
         ClipId = clipId;
+        Color = new ColorViewModel(editor, clipId, lutFiles ?? (() => []));
         playhead ??= () => 0;
         setPlayhead ??= _ => { };
         Motion =
@@ -33,6 +35,9 @@ public sealed partial class ClipViewModel : ObservableObject
         VolumeKeys = new(editor, clipId, AnimatedProperty.Volume, "Lautstärke", "dB", -60, 12, 0, playhead, setPlayhead);
         Title = editor.Project.FindClip(clipId)?.Clip.Title is not null ? new TitleViewModel(editor, clipId) : null;
     }
+
+    /// <summary>Farbkorrektur (Reiter „Farbe“).</summary>
+    public ColorViewModel Color { get; }
 
     /// <summary>Titelwerkzeug (nur bei Titel-Clips).</summary>
     public TitleViewModel? Title { get; }
@@ -322,6 +327,7 @@ public sealed partial class ClipViewModel : ObservableObject
     {
         OnPropertyChanged(string.Empty);
         Title?.Refresh();
+        Color.Refresh();
         RefreshMotion();
     }
 

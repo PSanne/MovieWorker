@@ -16,8 +16,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 8 | Profi-Schnitt: Trimm-Modi, Keyframes, Geschwindigkeitsrampen, verschachtelte Clips | ✅ fertig |
 | 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | ✅ fertig |
 | 10 | Mehrspur, Multicam & Mischmodi | ✅ fertig |
-| 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | ⏳ als Nächstes |
-| 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | geplant |
+| 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | ✅ fertig |
+| 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | ⏳ als Nächstes |
 | 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | geplant |
 | 14 | Ton II: ADR, Sprachaufnahme, Surround/räumlicher Ton | geplant |
 | 15 | Effekte & Compositing: Keying, Masken, Tracking, Knoten-Editor | geplant |
@@ -93,7 +93,7 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Multicam: R6 Mark II und 70D synchron (per Ton) als Mehrkamera-Clip, Kamerawechsel live
 - Mischmodi (Multiplizieren, Negativ multiplizieren, Überlagern …)
 
-## Sprint 11 – Farbe I
+## Sprint 11 – Farbe I ✅
 - LUT-Bibliothek (z. B. offizielle Canon-LUTs Canon Log 3 → BT.709), HDR PQ → SDR, HDR10-Export
 - Farbräder (Lift/Gamma/Gain), Belichtung, Kontrast, Weißabgleich, Sättigung
 - Messinstrumente: Waveform, Vektorskop, Histogramm

@@ -44,6 +44,13 @@ public partial class MainWindow : Window
         OverviewTimeline.SizeChanged += (_, _) => OverviewTimeline.ZoomToFit();
         Loaded += (_, _) => SyncScrollBar();
         SourceMonitor.Attach(viewModel);
+        ProgramMonitor.StillRendered += (_, _) =>
+        {
+            if (ColorTab.IsSelected)
+            {
+                _ = _viewModel.UpdateScopesAsync();
+            }
+        };
         viewModel.ExportQueue.Jobs.CollectionChanged += (_, _) =>
         {
             EmptyQueueHint.Visibility = viewModel.ExportQueue.Jobs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -375,7 +382,11 @@ public partial class MainWindow : Window
         switch (e.PropertyName)
         {
             case nameof(MainViewModel.SelectedClip) when _viewModel.SelectedClip is not null:
-                ClipTab.IsSelected = true;
+                if (!ColorTab.IsSelected)
+                {
+                    ClipTab.IsSelected = true;
+                }
+
                 break;
             case nameof(MainViewModel.PlayheadFrame):
                 Timeline.FollowPlayhead();

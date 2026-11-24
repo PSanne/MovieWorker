@@ -13,6 +13,8 @@
         <KeyBinding Key="I" Modifiers="Control" Command="{Binding ImportFilesCommand}" />
         <KeyBinding Key="E" Modifiers="Control" Command="{Binding ExportCommand}" />
         <KeyBinding Key="D" Modifiers="Control" Command="{Binding AddDefaultTransitionCommand}" />
+        <KeyBinding Key="C" Modifiers="Control+Alt" Command="{Binding CopyGradeCommand}" />
+        <KeyBinding Key="V" Modifiers="Control+Alt" Command="{Binding PasteGradeCommand}" />
         <KeyBinding Key="T" Modifiers="Control+Shift" Command="{Binding AddTitleFromMenuCommand}" CommandParameter="Headline" />
         <KeyBinding Key="E" Modifiers="Control+Shift" Command="{Binding ExportStillCommand}" />
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
@@ -97,6 +99,16 @@
                 <MenuItem Header="Proxys beim Import _automatisch erstellen" IsCheckable="True" IsChecked="{Binding AutoCreateProxies}" />
                 <MenuItem Header="Proxy für Auswahl erstellen" Command="{Binding CreateProxyForSelectedCommand}" />
                 <MenuItem Header="Alle fehlenden Proxys erstellen" Command="{Binding CreateAllProxiesCommand}" />
+            </MenuItem>
+            <MenuItem Header="_Farbe">
+                <MenuItem Header="Farbkorrektur _kopieren" InputGestureText="Strg+Alt+C" Command="{Binding CopyGradeCommand}" />
+                <MenuItem Header="Farbkorrektur _einfügen" InputGestureText="Strg+Alt+V" Command="{Binding PasteGradeCommand}" />
+                <MenuItem Header="Auf alle Clips dieser _Kamera übertragen" Command="{Binding ApplyGradeToCameraFromMenuCommand}" />
+                <Separator />
+                <MenuItem Header="Als Farb_referenz merken" Command="{Binding SetGradeReferenceCommand}" />
+                <MenuItem Header="An Referenz _angleichen (70D ↔ R6)" Command="{Binding MatchToReferenceCommand}" />
+                <Separator />
+                <MenuItem Header="_LUT-Ordner festlegen …" Command="{Binding SetLutFolderCommand}" />
             </MenuItem>
             <MenuItem Header="_Extras">
                 <MenuItem Header="_FFmpeg-Ordner festlegen …" Command="{Binding SetFfmpegFolderCommand}" />
@@ -464,6 +476,93 @@
                                 </StackPanel>
                             </StackPanel>
                         </Grid>
+                    </ScrollViewer>
+                </TabItem>
+                <TabItem Header="Farbe" x:Name="ColorTab">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="8">
+                            <TextBlock Text="Klicke einen Clip in der Timeline an, um seine Farben zu bearbeiten." Style="{StaticResource Hint}"
+                                       Visibility="{Binding SelectedClip, Converter={StaticResource NullToVisibility}, ConverterParameter=invert}" />
+                            <StackPanel DataContext="{Binding SelectedClip.Color}" Visibility="{Binding Converter={StaticResource NullToVisibility}}">
+                                <TextBlock Text="Eingang" Style="{StaticResource SectionHeader}" />
+                                <ComboBox ItemsSource="{Binding Source={x:Static vm:ColorViewModel.TransformChoices}}" SelectedItem="{Binding Transform}" />
+                                <DockPanel Margin="0,4,0,0" Visibility="{Binding UsesLut, Converter={StaticResource BoolToVisibility}}">
+                                    <Button DockPanel.Dock="Right" Content="…" Width="28" Margin="4,0,0,0" ToolTip="LUT-Datei wählen"
+                                            Command="{Binding DataContext.ChooseLutFileCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                    <ComboBox ItemsSource="{Binding Luts}" SelectedItem="{Binding Lut}" ToolTip="LUTs aus dem LUT-Ordner (Menü Farbe)" />
+                                </DockPanel>
+                                <ComboBox Margin="0,4,0,0" ItemsSource="{Binding Source={x:Static vm:ColorViewModel.ToneMapChoices}}" SelectedItem="{Binding ToneMap}"
+                                          Visibility="{Binding UsesToneMap, Converter={StaticResource BoolToVisibility}}" />
+
+                                <TextBlock Text="Grundkorrektur" Style="{StaticResource SectionHeader}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="84" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="42" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="Belichtung" VerticalAlignment="Center" />
+                                    <Slider Grid.Column="1" Minimum="-3" Maximum="3" Value="{Binding Exposure}" SmallChange="0.1" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Exposure, StringFormat='{}{0:+0.0;-0.0;0} EV'}" TextAlignment="Right" />
+                                    <TextBlock Grid.Row="1" Text="Kontrast" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="1" Grid.Column="1" Minimum="-100" Maximum="100" Value="{Binding Contrast}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Contrast, StringFormat='{}{0:+0;-0;0}'}" TextAlignment="Right" />
+                                    <TextBlock Grid.Row="2" Text="Sättigung" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="200" Value="{Binding Saturation}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding Saturation, StringFormat='{}{0:0} %'}" TextAlignment="Right" />
+                                    <TextBlock Grid.Row="3" Text="Temperatur" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="3" Grid.Column="1" Minimum="-100" Maximum="100" Value="{Binding Temperature}" ToolTip="links kühler, rechts wärmer" />
+                                    <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding Temperature, StringFormat='{}{0:+0;-0;0}'}" TextAlignment="Right" />
+                                    <TextBlock Grid.Row="4" Text="Tönung" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="4" Grid.Column="1" Minimum="-100" Maximum="100" Value="{Binding Tint}" ToolTip="links grüner, rechts magenta" />
+                                    <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding Tint, StringFormat='{}{0:+0;-0;0}'}" TextAlignment="Right" />
+                                </Grid>
+
+                                <TextBlock Text="Farbräder" Style="{StaticResource SectionHeader}" />
+                                <ItemsControl ItemsSource="{Binding Wheels}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Columns="3" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="2">
+                                                <TextBlock Text="{Binding Label}" FontSize="11" HorizontalAlignment="Center" />
+                                                <c:ColorWheelControl X="{Binding X}" Y="{Binding Y}" Width="88" Height="88" Margin="0,2" />
+                                                <Slider Minimum="-1" Maximum="1" Value="{Binding Master}" ToolTip="Helligkeit dieses Bereichs" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="✓ An Referenz angeglichen" Foreground="#1E6B35" Visibility="{Binding IsMatched, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+
+                            <WrapPanel Margin="0,8,0,0" Visibility="{Binding SelectedClip, Converter={StaticResource NullToVisibility}}">
+                                <Button Content="Zurücksetzen" Padding="6,1" Margin="0,0,4,4" Command="{Binding ResetGradeCommand}" />
+                                <Button Content="Kopieren" Padding="6,1" Margin="0,0,4,4" Command="{Binding CopyGradeCommand}" />
+                                <Button Content="Einfügen" Padding="6,1" Margin="0,0,4,4" Command="{Binding PasteGradeCommand}" />
+                                <Button Content="Auf Kamera übertragen" Padding="6,1" Margin="0,0,4,4" Command="{Binding ApplyGradeToCameraFromMenuCommand}"
+                                        ToolTip="Diese Korrektur auf alle Clips derselben Kamera (und Kennlinie) übertragen" />
+                                <Button Content="Als Referenz" Padding="6,1" Margin="0,0,4,4" Command="{Binding SetGradeReferenceCommand}"
+                                        ToolTip="Dieses Bild als Farbreferenz merken (z. B. ein R6-Mark-II-Clip)" />
+                                <Button Content="An Referenz angleichen" Padding="6,1" Margin="0,0,4,4" Command="{Binding MatchToReferenceCommand}"
+                                        IsEnabled="{Binding HasGradeReference}" ToolTip="Farben dieses Clips (z. B. EOS 70D) an die Referenz angleichen" />
+                            </WrapPanel>
+
+                            <TextBlock Text="Messinstrumente" Style="{StaticResource SectionHeader}" />
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="↻" Width="26" Margin="4,0,0,0" Command="{Binding UpdateScopesCommand}" ToolTip="Neu berechnen" />
+                                <ComboBox ItemsSource="{Binding ScopeKinds}" SelectedItem="{Binding SelectedScopeChoice}" />
+                            </DockPanel>
+                            <Border Background="Black" Margin="0,4,0,0" Height="190">
+                                <Image Source="{Binding ScopeImage}" Stretch="Fill" />
+                            </Border>
+                            <TextBlock Style="{StaticResource Hint}" Text="Zeigt das Bild am Abspielkopf – wird im Stillstand automatisch aktualisiert, solange dieser Reiter offen ist." />
+                        </StackPanel>
                     </ScrollViewer>
                 </TabItem>
                 <TabItem Header="Export" x:Name="ExportTab">

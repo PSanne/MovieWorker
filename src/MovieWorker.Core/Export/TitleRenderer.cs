@@ -52,7 +52,7 @@ public static class FontResolver
 public static class TitleRenderer
 {
     /// <summary>Filter für alle Titel des Projekts (leer, wenn es keine gibt).</summary>
-    public static IReadOnlyList<string> Filters(MovieProject project, int width, int height, Func<string, bool>? fileExists = null)
+    public static IReadOnlyList<string> Filters(MovieProject project, int width, int height, Func<string, bool>? fileExists = null, bool hdr = false)
     {
         var rate = project.Settings.FrameRate;
         var filters = new List<string>();
@@ -60,7 +60,7 @@ public static class TitleRenderer
         {
             foreach (var clip in track.OrderedClips.Where(c => c.Title is not null))
             {
-                filters.AddRange(ForClip(clip, rate, width, height, null, fileExists));
+                filters.AddRange(ForClip(clip, rate, width, height, null, fileExists, hdr));
             }
         }
 
@@ -78,7 +78,7 @@ public static class TitleRenderer
     }
 
     public static IReadOnlyList<string> ForClip(TimelineClip clip, FrameRate rate, int width, int height, double? fixedTime,
-        Func<string, bool>? fileExists = null)
+        Func<string, bool>? fileExists = null, bool hdr = false)
     {
         var spec = clip.Title!;
         var lines = spec.Lines;
@@ -130,7 +130,7 @@ public static class TitleRenderer
                 TitleAlign.Right => $"{N(anchorX)}-text_w{dx}",
                 _ => $"{N(anchorX)}-text_w/2{dx}",
             };
-            var style = $"{fontOption}:fontsize={sizes[i]}:fontcolor={spec.Color}:x='{x}':y='{lineTop}':expansion=none";
+            var style = $"{fontOption}:fontsize={sizes[i]}:fontcolor={TextColor(spec.Color, hdr)}:x='{x}':y='{lineTop}':expansion=none";
             style += spec.Box
                 ? $":box=1:boxcolor={spec.BoxColor}@{N(Math.Clamp(spec.BoxOpacity, 0, 1))}:boxborderw={Math.Max(4, sizes[i] / 4)}"
                 : ":shadowcolor=black@0.6:shadowx=2:shadowy=2";
@@ -162,6 +162,28 @@ public static class TitleRenderer
         }
 
         return filters;
+    }
+
+    private static readonly Dictionary<string, (int R, int G, int B)> Named = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["white"] = (255, 255, 255), ["black"] = (0, 0, 0), ["yellow"] = (255, 255, 0), ["orange"] = (255, 165, 0),
+        ["red"] = (255, 0, 0), ["deepskyblue"] = (0, 191, 255), ["lightgreen"] = (144, 238, 144), ["gray"] = (128, 128, 128),
+    };
+
+    /// <summary>
+    /// Textfarbe; bei HDR-Ausgabe auf SDR-Helligkeit (≈ 203 Nits, PQ-Wert ≈ 0,58) gedämpft,
+    /// sonst wäre weißer Text in PQ gleißend hell.
+    /// </summary>
+    public static string TextColor(string color, bool hdr)
+    {
+        if (!hdr)
+        {
+            return color;
+        }
+
+        var (r, g, b) = Named.TryGetValue(color, out var rgb) ? rgb : (255, 255, 255);
+        int Scale(int v) => (int)Math.Round(v * 0.58);
+        return $"0x{Scale(r):X2}{Scale(g):X2}{Scale(b):X2}";
     }
 
     /// <summary>Zeichen, die in ffmpeg-Filtern stören, durch unkritische ersetzen.</summary>

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MovieWorker.App.Services;
 using MovieWorker.Core.Camera;
+using MovieWorker.Core.Color;
 using MovieWorker.Core.Media;
 using MovieWorker.Core.Projects;
 using MovieWorker.Core.Time;
@@ -234,7 +235,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     partial void OnSelectedClipIdChanged(Guid? value) =>
         SelectedClip = value is { } id && Project.FindClip(id) is not null
-            ? new ClipViewModel(Editor, id, () => PlayheadFrame, frame => PlayheadFrame = frame)
+            ? new ClipViewModel(Editor, id, () => PlayheadFrame, frame => PlayheadFrame = frame, () => LutFiles)
             : null;
 
     partial void OnPlayheadFrameChanged(long value)
@@ -327,6 +328,260 @@ public sealed partial class MainViewModel : ObservableObject
         Editor.SetTransition(cut.Id, new Transition { Type = TransitionType.Crossfade, DurationFrames = Project.Settings.FrameRate.NominalFps });
         SelectedClipId = cut.Id;
         StatusText = "Kreuzblende (1 s) eingefügt – Art und Länge im Inspektor ändern.";
+    }
+
+    // ---------------------------------------------------------------- Farbe (Sprint 11)
+
+    /// <summary>LUT-Dateien (.cube) aus dem eingestellten LUT-Ordner.</summary>
+    public IReadOnlyList<string> LutFiles => LutLibrary.Scan(_settings.Settings.LutFolder);
+
+    private ColorGrade? _copiedGrade;
+    private (ColorTransform Transform, string? Lut)? _copiedInput;
+    private ScopeData? _gradeReference;
+
+    [ObservableProperty]
+    private ScopeKind _selectedScope;
+
+    [ObservableProperty]
+    private System.Windows.Media.ImageSource? _scopeImage;
+
+    public IReadOnlyList<LabeledValue<ScopeKind>> ScopeKinds { get; } =
+    [
+        new(ScopeKind.Waveform, "Waveform (Helligkeit)"),
+        new(ScopeKind.Parade, "RGB-Parade"),
+        new(ScopeKind.Vectorscope, "Vektorskop (Farbe)"),
+        new(ScopeKind.Histogram, "Histogramm"),
+    ];
+
+    public LabeledValue<ScopeKind> SelectedScopeChoice
+    {
+        get => ScopeKinds.First(k => k.Value == SelectedScope);
+        set
+        {
+            SelectedScope = value.Value;
+            _ = UpdateScopesAsync();
+        }
+    }
+
+    public bool HasGradeReference => _gradeReference is not null;
+
+    [RelayCommand]
+    private void SetLutFolder()
+    {
+        var folder = _dialogs.PickFolder("Ordner mit LUT-Dateien (.cube) wählen – z. B. die Canon-LUTs", _settings.Settings.LutFolder);
+        if (folder is null)
+        {
+            return;
+        }
+
+        _settings.Settings.LutFolder = folder;
+        var log3 = LutLibrary.Scan(folder).FirstOrDefault(LutLibrary.LooksLikeCanonLog3);
+        if (log3 is not null && _settings.Settings.DefaultCanonLog3Lut is null)
+        {
+            _settings.Settings.DefaultCanonLog3Lut = log3;
+            StatusText = $"LUT-Ordner gesetzt. Standard für Canon Log 3: {Path.GetFileName(log3)}";
+        }
+        else
+        {
+            StatusText = $"LUT-Ordner gesetzt ({LutFiles.Count} LUTs).";
+        }
+
+        _settings.Save();
+        OnPropertyChanged(nameof(LutFiles));
+        SelectedClip?.Color.Refresh();
+    }
+
+    [RelayCommand]
+    private void ChooseLutFile()
+    {
+        if (SelectedClip is not { } clip)
+        {
+            return;
+        }
+
+        var path = _dialogs.OpenFile("LUT wählen", "3D-LUT (*.cube)|*.cube");
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            CubeLut.Load(path); // prüft die Datei
+            clip.Color.SetLut(path);
+            if (LutLibrary.LooksLikeCanonLog3(path) && _settings.Settings.DefaultCanonLog3Lut is null)
+            {
+                _settings.Settings.DefaultCanonLog3Lut = path;
+                _settings.Save();
+            }
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or FormatException)
+        {
+            _dialogs.Error("Diese LUT kann nicht verwendet werden:\n" + ex.Message);
+        }
+    }
+
+    [RelayCommand]
+    private void ResetGrade()
+    {
+        if (SelectedClipId is { } id)
+        {
+            Editor.UpdateClip(id, "Farbkorrektur zurücksetzen", c => c.Grade = new ColorGrade { ToneMap = c.Grade.ToneMap });
+        }
+    }
+
+    [RelayCommand]
+    public void CopyGrade()
+    {
+        if (SelectedClipId is { } id && Project.FindClip(id) is (_, { } clip))
+        {
+            _copiedGrade = clip.Grade.Clone();
+            _copiedInput = (clip.ColorTransform, clip.LutPath);
+            StatusText = "Farbkorrektur kopiert.";
+        }
+    }
+
+    [RelayCommand]
+    public void PasteGrade()
+    {
+        if (_copiedGrade is null || SelectedClipId is not { } id)
+        {
+            return;
+        }
+
+        var grade = _copiedGrade.Clone();
+        var input = _copiedInput;
+        Editor.UpdateClip(id, "Farbkorrektur einfügen", c =>
+        {
+            c.Grade = grade.Clone();
+            if (input is { } i)
+            {
+                c.ColorTransform = i.Transform;
+                c.LutPath = i.Lut;
+            }
+        });
+        StatusText = "Farbkorrektur eingefügt.";
+    }
+
+    /// <summary>Überträgt die Farbkorrektur des ausgewählten Clips auf alle Clips derselben Kamera.</summary>
+    [RelayCommand]
+    private void ApplyGradeToCameraFromMenu() => ApplyGradeToCamera();
+
+    public int ApplyGradeToCamera()
+    {
+        if (SelectedClipId is not { } id || Project.FindClip(id) is not (_, { } source) || Project.FindMedia(source.MediaId) is not { } media)
+        {
+            return 0;
+        }
+
+        var camera = media.Detection.Camera;
+        var targets = Project.AllClips
+            .Where(c => c.Id != id && Project.FindMedia(c.MediaId) is { } m && m.Detection.Camera == camera
+                        && m.Detection.Transfer == media.Detection.Transfer)
+            .Select(c => c.Id).ToList();
+        foreach (var target in targets)
+        {
+            var grade = source.Grade.Clone();
+            Editor.UpdateClip(target, "Farbkorrektur übertragen", c =>
+            {
+                c.Grade = grade.Clone();
+                c.ColorTransform = source.ColorTransform;
+                c.LutPath = source.LutPath;
+            });
+        }
+
+        StatusText = $"Farbkorrektur auf {targets.Count} weitere Clip(s) derselben Kamera übertragen.";
+        return targets.Count;
+    }
+
+    /// <summary>Merkt sich das Bild des ausgewählten Clips als Farbreferenz (z. B. ein R6-Mark-II-Clip).</summary>
+    [RelayCommand]
+    public async Task SetGradeReferenceAsync()
+    {
+        if (SelectedClipId is { } id && Project.FindClip(id) is (_, { } clip))
+        {
+            _gradeReference = await ClipStatsAsync(Project, clip);
+            OnPropertyChanged(nameof(HasGradeReference));
+            StatusText = _gradeReference is null ? "Referenz konnte nicht gelesen werden." : $"„{clip.Name}“ ist jetzt die Farbreferenz.";
+        }
+    }
+
+    /// <summary>Gleicht den ausgewählten Clip (z. B. EOS 70D) farblich an die Referenz an.</summary>
+    [RelayCommand]
+    public async Task<bool> MatchToReferenceAsync()
+    {
+        if (_gradeReference is null || SelectedClipId is not { } id || Project.FindClip(id) is not (_, { } clip))
+        {
+            _dialogs.Error("Bitte zuerst einen Referenz-Clip auswählen und „Als Referenz“ klicken, dann den anzupassenden Clip wählen.");
+            return false;
+        }
+
+        // Ohne bisherigen Abgleich messen, sonst würde er doppelt wirken.
+        var probe = Project.Clone();
+        if (probe.FindClip(id) is (_, { } probeClip))
+        {
+            probeClip.Grade.MatchGainR = probeClip.Grade.MatchGainG = probeClip.Grade.MatchGainB = 1;
+            probeClip.Grade.MatchOffsetR = probeClip.Grade.MatchOffsetG = probeClip.Grade.MatchOffsetB = 0;
+        }
+
+        var target = await ClipStatsAsync(probe, clip);
+        if (target is null)
+        {
+            return false;
+        }
+
+        var reference = _gradeReference;
+        Editor.UpdateClip(id, "Farbabgleich", c => ColorMatch.Apply(reference, target, c.Grade));
+        StatusText = "Farbabgleich angewendet – Feinheiten mit den Farbrädern nachjustieren.";
+        return true;
+    }
+
+    private async Task<ScopeData?> ClipStatsAsync(MovieProject project, TimelineClip clip)
+    {
+        try
+        {
+            const int height = 180;
+            var width = Math.Max(2, (int)Math.Round(project.Settings.Width * (double)height / project.Settings.Height / 2) * 2);
+            var frame = clip.StartFrame + clip.LengthFrames / 2;
+            var raw = await _tools.Require().RunForBytesAsync(Core.Export.ExportBuilder.BuildRawFrame(project, frame, height).Arguments);
+            return raw.Length >= width * height * 3 ? ScopeData.FromRgb24(raw, width, height) : null;
+        }
+        catch (Exception ex) when (ex is Core.Media.FfmpegException or InvalidOperationException or IOException)
+        {
+            StatusText = "Bild konnte nicht gelesen werden: " + ex.Message;
+            return null;
+        }
+    }
+
+    /// <summary>Messinstrumente für das Bild am Abspielkopf neu berechnen.</summary>
+    [RelayCommand]
+    public async Task<bool> UpdateScopesAsync()
+    {
+        if (!Project.AllClips.Any() || !_tools.IsAvailable)
+        {
+            ScopeImage = null;
+            return false;
+        }
+
+        try
+        {
+            const int height = 180;
+            var width = Math.Max(2, (int)Math.Round(Project.Settings.Width * (double)height / Project.Settings.Height / 2) * 2);
+            var raw = await _tools.Require().RunForBytesAsync(Core.Export.ExportBuilder.BuildRawFrame(Project, PlayheadFrame, height).Arguments);
+            if (raw.Length < width * height * 3)
+            {
+                return false;
+            }
+
+            var data = await Task.Run(() => ScopeData.FromRgb24(raw, width, height));
+            ScopeImage = ScopeRenderer.Render(data, SelectedScope);
+            return true;
+        }
+        catch (Exception ex) when (ex is Core.Media.FfmpegException or InvalidOperationException or IOException)
+        {
+            StatusText = "Messinstrumente: " + ex.Message;
+            return false;
+        }
     }
 
     /// <summary>Im Medienpool markierte Aufnahmen (Mehrfachauswahl mit Strg/Umschalt).</summary>

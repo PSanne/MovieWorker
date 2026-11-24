@@ -129,6 +129,9 @@ public sealed class TimelineClip
     /// <summary>Optionale Proxy-Datei für flüssige Vorschau (wird beim Export nicht verwendet).</summary>
     public string? ProxyPath { get; set; }
 
+    /// <summary>Farbkorrektur (Belichtung, Kontrast, Farbräder, Farbabgleich …).</summary>
+    public Color.ColorGrade Grade { get; set; } = new();
+
     /// <summary>Feste Bildlage (Position, Zoom, Drehung, Deckkraft).</summary>
     public ClipTransform Transform { get; set; } = new();
 
@@ -249,6 +252,7 @@ public sealed class TimelineClip
         copy.SourcePaths = [.. SourcePaths];
         copy.PartDurations = [.. PartDurations];
         copy.Transform = Transform.Clone();
+        copy.Grade = Grade.Clone();
         copy.Keyframes = Keyframes.Select(k => k.Clone()).ToList();
         copy.NestedTracks = NestedTracks?.Select(t => t.Clone()).ToList();
         copy.TransitionIn = TransitionIn?.Clone();

@@ -37,7 +37,8 @@ public sealed record ExportPreset(
     int? OutputHeight = null,
     ReframeMode Reframe = ReframeMode.BlurBackground,
     bool AudioOnly = false,
-    double? MaxFrameRate = null)
+    double? MaxFrameRate = null,
+    bool HdrOutput = false)
 {
     public override string ToString() => Name;
 
@@ -92,6 +93,13 @@ public sealed record ExportPreset(
         new("hevc-10bit", "Archiv – H.265 10 Bit",
             "Sehr effizient bei voller Qualität, 10 Bit ohne Banding. Für das eigene Archiv.",
             PresetCategory.Archiv, ".mp4", "yuv420p10le", ["-c:v", "libx265", "-preset", "medium", "-crf", "16", "-tag:v", "hvc1", "-movflags", "+faststart"], Aac320),
+        new("hevc-hdr10", "HDR10 – H.265 10 Bit (PQ, BT.2020)",
+            "Echtes HDR für HDR-Fernseher, YouTube HDR und moderne Smartphones. HDR-PQ-Aufnahmen der R6 Mark II bleiben HDR, normales Material wird umgerechnet.",
+            PresetCategory.Archiv, ".mp4", "yuv420p10le",
+            ["-c:v", "libx265", "-preset", "medium", "-crf", "18", "-tag:v", "hvc1",
+             "-x265-params", "hdr-opt=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400",
+             "-movflags", "+faststart"],
+            Aac320, HdrOutput: true),
         new("audio-wav", "Nur Ton – WAV (24 Bit)",
             "Die fertige Tonmischung unkomprimiert, z. B. für Mastering oder Podcast.",
             PresetCategory.Ton, ".wav", "", [], Pcm24, AudioOnly: true),
@@ -106,7 +114,11 @@ public sealed record ExportPreset(
     public static ExportPreset StillImage(int height) => new(
         "still", "Standbild", "Vorschau", PresetCategory.Web, ".png", "yuv420p", [], [], MaxHeight: Math.Max(2, height / 2 * 2));
 
-    public bool IsStillImage => Id == "still";
+    /// <summary>Interne Vorlage: Rohbild (RGB24) für Messinstrumente.</summary>
+    public static ExportPreset RawImage(int height) => new(
+        "stillraw", "Rohbild", "Messinstrumente", PresetCategory.Web, ".rgb", "yuv420p", [], [], MaxHeight: Math.Max(2, height / 2 * 2));
+
+    public bool IsStillImage => Id is "still" or "stillraw";
 
     public static ExportPreset? Find(string? id) => All.FirstOrDefault(p => p.Id == id);
 

@@ -121,6 +121,12 @@ public static class ExportPreflight
             }));
         }
 
+        if (preset.HdrOutput && !clips.Any(x => x.Clip.ColorTransform == ColorTransform.HdrToSdr))
+        {
+            issues.Add(new(IssueSeverity.Info,
+                "Im Projekt ist kein HDR-Material – alles wird von SDR nach HDR umgerechnet. Für echtes HDR mit der R6 Mark II in „HDR PQ“ filmen."));
+        }
+
         var outRate = ExportBuilder.OutputFrameRate(rate, preset);
         if (!outRate.Equals(rate))
         {

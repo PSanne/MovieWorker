@@ -25,14 +25,42 @@ public static class FfmpegArgs
     public const string HdrToSdrFilter =
         "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv";
 
-    /// <summary>Filter, der die Farben eines Clips nach Rec.709 bringt (leer, wenn nichts zu tun ist).</summary>
-    public static string? ColorFilter(TimelineClip clip) => clip.ColorTransform switch
+    public static string ToneMapFilter(Color.ToneMapping mapping) =>
+        HdrToSdrFilter.Replace("tonemap=hable", "tonemap=" + mapping.ToString().ToLowerInvariant(), StringComparison.Ordinal);
+
+    /// <summary>SDR (Rec.709) → HDR10 (PQ, BT.2020), SDR-Weiß bei 203 Nits.</summary>
+    public const string SdrToPqFilter =
+        "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,zscale=t=linear:npl=203,format=gbrpf32le,zscale=p=bt2020:t=smpte2084:m=bt2020nc:r=tv";
+
+    /// <summary>
+    /// Farbkette eines Clips: Eingangs-Umrechnung (LUT oder Tone-Mapping) und Farbkorrektur (als berechnete LUT).
+    /// Bei HDR-Ausgabe bleibt HDR-Material in PQ und SDR-Material wird nach PQ umgerechnet.
+    /// </summary>
+    public static string? ColorFilter(TimelineClip clip, bool hdrOutput = false)
     {
-        ColorTransform.Lut when !string.IsNullOrWhiteSpace(clip.LutPath) =>
-            $"lut3d=file={EscapeFilterPath(clip.LutPath!)}:interp=tetrahedral",
-        ColorTransform.HdrToSdr => HdrToSdrFilter,
-        _ => null,
-    };
+        var filters = new List<string>();
+        switch (clip.ColorTransform)
+        {
+            case ColorTransform.Lut when !string.IsNullOrWhiteSpace(clip.LutPath):
+                filters.Add($"lut3d=file={EscapeFilterPath(clip.LutPath!)}:interp=tetrahedral");
+                break;
+            case ColorTransform.HdrToSdr when !hdrOutput:
+                filters.Add(ToneMapFilter(clip.Grade.ToneMap));
+                break;
+        }
+
+        if (!clip.Grade.IsNeutral)
+        {
+            filters.Add($"lut3d=file={EscapeFilterPath(Color.GradeLutCache.Ensure(clip.Grade))}:interp=tetrahedral");
+        }
+
+        if (hdrOutput && clip.ColorTransform != ColorTransform.HdrToSdr)
+        {
+            filters.Add(SdrToPqFilter);
+        }
+
+        return filters.Count == 0 ? null : string.Join(',', filters);
+    }
 
     /// <summary>
     /// Liest den Fortschritt aus <c>-progress pipe:1</c> (Zeilen wie „out_time_us=1234567“).

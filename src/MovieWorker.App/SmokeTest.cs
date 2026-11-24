@@ -7,6 +7,7 @@ using MovieWorker.App.Services;
 using MovieWorker.App.ViewModels;
 using MovieWorker.App.Views;
 using MovieWorker.Core.Camera;
+using MovieWorker.Core.Media;
 using MovieWorker.Core.Settings;
 using MovieWorker.Core.Timeline;
 
@@ -474,6 +475,58 @@ public static class SmokeTest
         c.Check(compJob.State == ExportJobState.Done, "Export mit Bild-in-Bild und Mischmodus: " + compJob.Detail);
         c.Check(await vm.ExportStillToAsync(Path.Combine(exportFolder, "komposit.png")), "Einzelbild aus der Export-Kette");
         SaveScreenshot(window, Path.Combine(c.OutputFolder, "mehrspur.png"));
+        clipCount = vm.Project.AllClips.Count();
+
+        // ---- Farbe I (Sprint 11): LUTs, Grundkorrektur, Farbräder, Abgleich, Messinstrumente, HDR10
+        MovieWorker.Core.Color.GradeLutCache.Folder = Path.Combine(c.Temp, "Farbkorrekturen");
+        var lutFolder = Path.Combine(c.Temp, "LUTs");
+        Directory.CreateDirectory(lutFolder);
+        var lutFile = Path.Combine(lutFolder, "CanonLog3-to-BT709_Test.cube");
+        File.WriteAllText(lutFile, MovieWorker.Core.Color.GradeLutCache.ToCube(new MovieWorker.Core.Color.ColorGrade { Contrast = 20, Saturation = 120 }, 17));
+        dialogs.Answers.Enqueue(lutFolder);
+        vm.SetLutFolderCommand.Execute(null);
+        c.Check(vm.LutFiles.Count == 1 && settings.Settings.DefaultCanonLog3Lut == lutFile, "LUT-Ordner gelesen, Canon-Log-3-LUT als Standard erkannt");
+
+        var logClip = vm.Project.VideoTracks.First().Clips.First(cl => !cl.IsMulticam
+            && vm.Project.FindMedia(cl.MediaId)?.Detection.Transfer == ColorTransfer.CanonLog3);
+        vm.SelectedClipId = logClip.Id;
+        var color = vm.SelectedClip!.Color;
+        color.Lut = color.Luts.First();
+        color.Exposure = 0.5;
+        color.Saturation = 110;
+        color.Lift.X = 0.3;
+        color.Gamma.Master = 0.1;
+        var graded = vm.Project.FindClip(logClip.Id)!.Value.Clip;
+        c.Check(graded.ColorTransform == Core.Timeline.ColorTransform.Lut && graded.LutPath == lutFile && !graded.Grade.IsNeutral
+                && graded.Grade.Lift.R > 0, "LUT, Belichtung, Sättigung und Farbrad gesetzt");
+        vm.PlayheadFrame = graded.StartFrame + 5;
+        c.Check(await program.RenderStillNowAsync(), "Vorschau mit LUT und Farbkorrektur " + program.MessageText);
+        foreach (var kind in vm.ScopeKinds)
+        {
+            vm.SelectedScopeChoice = kind;
+            c.Check(await vm.UpdateScopesAsync() && vm.ScopeImage is not null, "Messinstrument " + kind.Label);
+        }
+
+        vm.CopyGrade();
+        var eosClip = vm.Project.VideoTracks.First().Clips.First(cl => !cl.IsMulticam
+            && vm.Project.FindMedia(cl.MediaId)?.Detection.Camera == CanonCamera.Eos70D);
+        vm.SelectedClipId = eosClip.Id;
+        vm.PasteGrade();
+        c.Check(Math.Abs(vm.Project.FindClip(eosClip.Id)!.Value.Clip.Grade.Exposure - 0.5) < 1e-6, "Farbkorrektur kopiert und eingefügt");
+        vm.ResetGradeCommand.Execute(null);
+        vm.SelectedClipId = logClip.Id;
+        await vm.SetGradeReferenceAsync();
+        vm.SelectedClipId = eosClip.Id;
+        c.Check(await vm.MatchToReferenceAsync() && vm.SelectedClip!.Color.IsMatched, "70D an R6-Referenz angeglichen");
+
+        var pqClip = vm.Project.VideoTracks.First().Clips.First(cl => cl.ColorTransform == Core.Timeline.ColorTransform.HdrToSdr);
+        vm.Editor.SetMarks(pqClip.StartFrame, pqClip.StartFrame + 25);
+        var hdrJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("hevc-hdr10")!, Path.Combine(exportFolder, "hdr10.mp4"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(hdrJob.State == ExportJobState.Done, "HDR10-Export: " + hdrJob.Detail);
+        var hdrInfo = await tools.Require().ProbeAsync(hdrJob.OutputPath);
+        c.Check(hdrInfo.MetadataTransfer == ColorTransfer.HdrPq, "HDR10-Datei ist als PQ gekennzeichnet");
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "farbe.png"));
         clipCount = vm.Project.AllClips.Count();
 
         // ---- Speichern & Laden

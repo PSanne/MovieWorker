@@ -104,7 +104,7 @@ public static class ExportBuilder
             // Bild
             var videoIn = ConcatParts(graph, parts, "v", $"cv{segment}");
             var vf = new List<string> { $"setpts=(PTS-STARTPTS)/{Number(clip.Speed)}" };
-            if (FfmpegArgs.ColorFilter(clip) is { } color)
+            if (FfmpegArgs.ColorFilter(clip, preset.HdrOutput) is { } color)
             {
                 vf.Add(color);
             }
@@ -165,7 +165,7 @@ public static class ExportBuilder
             foreach (var clip in track.OrderedClips.Where(c => c.SourcePaths.Count > 0 && c.HasVideo))
             {
                 var parts = AddClipInputs(clip, rate, inputs, ref inputIndex);
-                composite = AddOverlay(graph, composite, clip, parts, layer, width, height, rate, pixelFormat);
+                composite = AddOverlay(graph, composite, clip, parts, layer, width, height, rate, pixelFormat, preset.HdrOutput);
                 if (clip.HasAudio && !clip.AudioMuted && Math.Abs(clip.Speed - 1) < 1e-9)
                 {
                     overlayAudio.Add((clip, track, parts));
@@ -176,7 +176,7 @@ public static class ExportBuilder
         }
 
         // ---------- Titel ----------
-        var titles = TitleRenderer.Filters(project, width, height);
+        var titles = TitleRenderer.Filters(project, width, height, hdr: preset.HdrOutput);
         if (titles.Count > 0)
         {
             graph.Append(CultureInfo.InvariantCulture, $"{composite}{string.Join(',', titles)}[vcat];");
@@ -250,7 +250,10 @@ public static class ExportBuilder
             graph.Append(";[aout]anullsink");
             var stillArgs = new List<string> { "-v", "error", "-nostdin" };
             stillArgs.AddRange(inputs);
-            stillArgs.AddRange(["-filter_complex", graph.ToString(), "-map", "[vout]", "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"]);
+            stillArgs.AddRange(["-filter_complex", graph.ToString(), "-map", "[vout]", "-frames:v", "1"]);
+            stillArgs.AddRange(preset.Id == "stillraw"
+                ? ["-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+                : ["-f", "image2pipe", "-vcodec", "png", "-"]);
             return new FfmpegJob(stillArgs, rate.FramesToSeconds(totalFrames), "-");
         }
 
@@ -267,7 +270,9 @@ public static class ExportBuilder
         {
             args.AddRange(preset.VideoArguments);
             args.AddRange(["-pix_fmt", preset.PixelFormat, "-r", outputRate.ToFfmpeg()]);
-            args.AddRange(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]);
+            args.AddRange(preset.HdrOutput
+                ? ["-color_primaries", "bt2020", "-color_trc", "smpte2084", "-colorspace", "bt2020nc"]
+                : ["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]);
         }
 
         args.AddRange(preset.AudioArguments);
@@ -279,12 +284,16 @@ public static class ExportBuilder
     public static FfmpegJob BuildStill(MovieProject project, long frame, int height) =>
         Build(project, ExportPreset.StillImage(height), "-", frame, frame + 1);
 
+    /// <summary>Rohbild (RGB24) eines Timeline-Bildes in <paramref name="height"/> Zeilen – für Messinstrumente.</summary>
+    public static FfmpegJob BuildRawFrame(MovieProject project, long frame, int height) =>
+        Build(project, ExportPreset.RawImage(height), "-", frame, frame + 1);
+
     /// <summary>
     /// Legt einen Clip einer oberen Videospur über das bisherige Bild: als Bild-in-Bild (Größe, Lage, Zuschnitt,
     /// Drehung, Deckkraft; Lage auch per Keyframes) oder bildfüllend mit Mischmodus. Liefert das neue Label.
     /// </summary>
     private static string AddOverlay(StringBuilder graph, string below, TimelineClip clip, List<int> parts, int layer,
-        int width, int height, Time.FrameRate rate, string pixelFormat)
+        int width, int height, Time.FrameRate rate, string pixelFormat, bool hdrOutput)
     {
         string N(double v) => v.ToString("0.######", CultureInfo.InvariantCulture);
         var start = rate.FramesToSeconds(clip.StartFrame);
@@ -292,7 +301,7 @@ public static class ExportBuilder
         var end = start + duration;
         var videoIn = ConcatParts(graph, parts, "v", $"ocv{layer}");
         var vf = new List<string> { $"setpts=(PTS-STARTPTS)/{N(clip.Speed)}" };
-        if (FfmpegArgs.ColorFilter(clip) is { } color)
+        if (FfmpegArgs.ColorFilter(clip, hdrOutput) is { } color)
         {
             vf.Add(color);
         }
