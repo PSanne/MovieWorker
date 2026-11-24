@@ -24,7 +24,9 @@ public partial class App : Application
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             var exitCode = await SmokeTest.RunAsync(e.Args[1], e.Args[2]);
-            Shutdown(exitCode);
+
+            // Hart beenden: Der Exit-Code des Selbsttests soll nicht von Aufräumarbeiten abhängen.
+            Environment.Exit(exitCode);
             return;
         }
 

@@ -23,8 +23,21 @@ public static class SmokeTest
     {
         var outputFolder = Path.GetDirectoryName(Path.GetFullPath(logFile))!;
         Directory.CreateDirectory(outputFolder);
-        await using var log = new StreamWriter(logFile) { AutoFlush = true };
-        void Log(string text) => log.WriteLine(text);
+        var log = new StreamWriter(logFile) { AutoFlush = true };
+        var logLock = new object();
+        void Log(string text)
+        {
+            lock (logLock)
+            {
+                try
+                {
+                    log.WriteLine($"{DateTime.Now:HH:mm:ss} {text}");
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
+        }
 
         var context = new SmokeContext(mediaFolder, outputFolder, Log);
         var uiErrors = new List<string>();
@@ -49,9 +62,23 @@ public static class SmokeTest
         }
         finally
         {
-            foreach (Window window in Application.Current.Windows)
+            try
             {
-                window.Close();
+                foreach (Window window in Application.Current.Windows)
+                {
+                    window.Close();
+                }
+
+                await Settle();
+            }
+            catch (Exception ex)
+            {
+                Log("Hinweis beim Schließen: " + ex.Message);
+            }
+
+            lock (logLock)
+            {
+                log.Dispose();
             }
         }
     }

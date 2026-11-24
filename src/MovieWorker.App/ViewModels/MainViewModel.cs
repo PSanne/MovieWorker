@@ -347,7 +347,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Wie in Profi-Programmen: Der erste Videoclip bestimmt Auflösung und Bildrate eines leeren Projekts.</summary>
     private void AdoptSettingsIfFirstClip(MediaItem media)
     {
-        if (media.IsAudioOnly || Project.AllClips.Any())
+        if (media.IsAudioOnly || Project.VideoTracks.Any(t => t.Clips.Count > 0))
         {
             return;
         }
