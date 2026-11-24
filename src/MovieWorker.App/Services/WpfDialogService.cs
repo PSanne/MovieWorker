@@ -67,6 +67,7 @@ public sealed class WpfDialogService : IDialogService
         {
             ImportCardViewModel vm => new ImportCardWindow(vm),
             ProjectSettingsViewModel vm => new ProjectSettingsWindow(vm),
+            ExportDialogViewModel vm => new ExportWindow(vm),
             _ => throw new ArgumentException($"Kein Fenster für {viewModel.GetType().Name}"),
         };
         window.Owner = Owner;

@@ -10,8 +10,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 2 | App-Grundgerüst & Import | ✅ fertig |
 | 3 | Timeline-Oberfläche | ✅ fertig |
 | 4 | Vorschau & Proxys | ✅ fertig |
-| 5 | Ausgabe: Export-Dialog, Plattform-Vorlagen, Warteschlange (→ v0.5) | ⏳ als Nächstes |
-| 6 | Medien-Arbeitsbereich: Ordner, Metadaten, Bild-Ton-Synchronisation | geplant |
+| 5 | Ausgabe: Export-Dialog, Plattform-Vorlagen, Warteschlange (→ v0.5) | ✅ fertig |
+| 6 | Medien-Arbeitsbereich: Ordner, Metadaten, Bild-Ton-Synchronisation | ⏳ als Nächstes |
 | 7 | Schnellschnitt-Arbeitsbereich: Doppel-Timeline, Quellband, Einfügemodi | geplant |
 | 8 | Profi-Schnitt: Trimm-Modi, Keyframes, Geschwindigkeitsrampen, verschachtelte Clips | geplant |
 | 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | geplant |
@@ -61,7 +61,7 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Umschalten Proxy ↔ Original, Vorschau mit LUT/Tone-Mapping
 - J/K/L-Shuttle (rückwärts, Stopp, vorwärts bis 8×), Leertaste spielt ab
 
-## Sprint 5 – Ausgabe (→ Version 0.5)
+## Sprint 5 – Ausgabe (→ Version 0.5) ✅
 - Export-Dialog: Vorlage, Zielordner, Dateiname, Fortschritt, Restzeit, Abbrechen
 - Plattform-Vorlagen: YouTube (4K/HD), Vimeo, Instagram/TikTok/Shorts (Hochformat 9:16), Master (ProRes, DNxHR), Archiv (H.265 10 Bit)
 - Ganze Timeline oder nur In/Out-Bereich, Einzelbild als PNG

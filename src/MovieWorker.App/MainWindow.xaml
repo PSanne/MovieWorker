@@ -11,6 +11,8 @@
         <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveProjectCommand}" />
         <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding SaveProjectAsCommand}" />
         <KeyBinding Key="I" Modifiers="Control" Command="{Binding ImportFilesCommand}" />
+        <KeyBinding Key="E" Modifiers="Control" Command="{Binding ExportCommand}" />
+        <KeyBinding Key="E" Modifiers="Control+Shift" Command="{Binding ExportStillCommand}" />
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
         <KeyBinding Key="Y" Modifiers="Control" Command="{Binding RedoCommand}" />
     </Window.InputBindings>
@@ -33,6 +35,9 @@
                 <Separator />
                 <MenuItem Header="Dateien _importieren …" InputGestureText="Strg+I" Command="{Binding ImportFilesCommand}" />
                 <MenuItem Header="Speicher_karte importieren …" Command="{Binding ImportCardCommand}" />
+                <Separator />
+                <MenuItem Header="_Exportieren …" InputGestureText="Strg+E" Command="{Binding ExportCommand}" />
+                <MenuItem Header="Einzel_bild exportieren …" InputGestureText="Strg+Umschalt+E" Command="{Binding ExportStillCommand}" />
                 <Separator />
                 <MenuItem Header="_Projekteinstellungen …" Command="{Binding EditProjectSettingsCommand}" />
                 <Separator />
@@ -78,6 +83,7 @@
                 <Button Content="Dateien importieren" Command="{Binding ImportFilesCommand}" />
                 <Separator />
                 <Button Content="Speichern" Command="{Binding SaveProjectCommand}" />
+                <Button Content="Exportieren" FontWeight="SemiBold" Command="{Binding ExportCommand}" />
                 <Separator />
                 <Button Content="↶" ToolTip="Rückgängig (Strg+Z)" Command="{Binding UndoCommand}" />
                 <Button Content="↷" ToolTip="Wiederholen (Strg+Y)" Command="{Binding RedoCommand}" />
@@ -255,6 +261,45 @@
                             </StackPanel>
                         </Grid>
                     </ScrollViewer>
+                </TabItem>
+                <TabItem Header="Export" x:Name="ExportTab">
+                    <DockPanel Margin="6">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
+                            <Button Content="Neuer Export …" Padding="8,2" Command="{Binding ExportCommand}" />
+                            <Button Content="Erledigte entfernen" Padding="8,2" Margin="6,0,0,0" Command="{Binding ClearFinishedExportsCommand}" />
+                        </StackPanel>
+                        <Grid>
+                            <TextBlock Text="Noch keine Exporte. „Exportieren“ (Strg+E) legt einen Auftrag an; mehrere Aufträge laufen nacheinander."
+                                       Style="{StaticResource Hint}" Margin="4" x:Name="EmptyQueueHint" />
+                            <ItemsControl ItemsSource="{Binding ExportQueue.Jobs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ExportJobViewModel}">
+                                        <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="3" Padding="6" Margin="0,0,0,6" Background="White">
+                                            <StackPanel>
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}" Foreground="#555" />
+                                                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+                                                <TextBlock Text="{Binding PresetName}" FontSize="11" Foreground="#666" TextTrimming="CharacterEllipsis" />
+                                                <ProgressBar Height="8" Maximum="1" Value="{Binding Progress}" Margin="0,4,0,2" />
+                                                <TextBlock Text="{Binding Detail}" FontSize="11" TextWrapping="Wrap" />
+                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                    <Button Content="Abbrechen" Padding="6,0"
+                                                            Command="{Binding DataContext.CancelExportCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Visibility="{Binding CanCancel, Converter={StaticResource BoolToVisibility}}" />
+                                                    <Button Content="Im Ordner zeigen" Padding="6,0"
+                                                            Command="{Binding DataContext.ShowExportInFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Visibility="{Binding IsFinished, Converter={StaticResource BoolToVisibility}}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </DockPanel>
                 </TabItem>
                 <TabItem Header="Aufnahme">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">

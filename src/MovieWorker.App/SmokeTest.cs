@@ -241,6 +241,32 @@ public static class SmokeTest
         c.Check(source.PositionSeconds > 1, "Quellmonitor spielt ab");
         clipCount = vm.Project.AllClips.Count();
 
+        // ---- Export (Sprint 5): Dialog, Warteschlange, Plattform-Vorlagen, Bereich, Einzelbild
+        var exportDialog = new ExportDialogViewModel(vm.Project, vm.ProjectName, dialogs, settings);
+        c.Check(exportDialog.Issues.Count > 0 || exportDialog.HasNoIssues, "Prüfung vor dem Export läuft");
+        await ShowAndClose(new ExportWindow(exportDialog), c);
+        var exportFolder = Path.Combine(c.Temp, "Export");
+        vm.PlayheadFrame = 0;
+        vm.MarkIn();
+        vm.PlayheadFrame = 2 * vm.Project.Settings.FrameRate.NominalFps;
+        vm.MarkOut();
+        var hdJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("web-h264-1080")!, Path.Combine(exportFolder, "range.mp4"), useRange: true);
+        var verticalJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("social-vertical")!, Path.Combine(exportFolder, "hoch.mp4"), useRange: true);
+        var cancelled = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("prores-lt")!, Path.Combine(exportFolder, "abbruch.mov"), useRange: false);
+        vm.ExportQueue.Cancel(cancelled);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(hdJob.State == ExportJobState.Done, "Export Full HD (Bereich): " + hdJob.Detail);
+        c.Check(verticalJob.State == ExportJobState.Done, "Export Hochformat 9:16: " + verticalJob.Detail);
+        c.Check(cancelled.State == ExportJobState.Cancelled && !File.Exists(cancelled.OutputPath), "Wartender Auftrag abgebrochen");
+        var hdInfo = await tools.Require().ProbeAsync(hdJob.OutputPath);
+        c.Check(hdInfo.Video!.Height == Math.Min(1080, vm.Project.Settings.Height) && Math.Abs(hdInfo.Duration.TotalSeconds - 2) < 0.2,
+            $"Full-HD-Datei stimmt ({hdInfo.Video.Width}×{hdInfo.Video.Height}, {hdInfo.Duration.TotalSeconds:0.00} s)");
+        var verticalInfo = await tools.Require().ProbeAsync(verticalJob.OutputPath);
+        c.Check(verticalInfo.Video!.Width == 1080 && verticalInfo.Video.Height == 1920, "Hochformat-Datei ist 1080×1920");
+        vm.PlayheadFrame = 10;
+        c.Check(await vm.ExportStillToAsync(Path.Combine(exportFolder, "bild.png")), "Einzelbild exportiert");
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "export.png"));
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");

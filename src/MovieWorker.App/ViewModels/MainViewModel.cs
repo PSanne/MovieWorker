@@ -34,6 +34,10 @@ public sealed partial class MainViewModel : ObservableObject
         Proxies = new ProxyService(tools, settings);
         Proxies.ProxyFinished += (_, _) => Editor.NotifyMediaChanged();
         MediaItem.UseProxies = settings.Settings.UseProxies;
+        ExportQueue = new ExportQueueService(tools);
+        ExportQueue.JobFinished += (_, job) => StatusText = job.State == ExportJobState.Done
+            ? $"Export fertig: {job.FileName}"
+            : $"Export {job.StateText.ToLowerInvariant()}: {job.FileName} – {job.Detail}";
         RefreshRecentProjects();
         StatusText = tools.IsAvailable ? "Bereit." : tools.StatusText;
     }
@@ -51,6 +55,10 @@ public sealed partial class MainViewModel : ObservableObject
     public WaveformService Waveforms { get; }
 
     public ProxyService Proxies { get; }
+
+    public ExportQueueService ExportQueue { get; }
+
+    public string ProjectName => ProjectPath is null ? "Mein Film" : Path.GetFileNameWithoutExtension(ProjectPath);
 
     /// <summary>Vorschau mit Proxys (statt Originalen).</summary>
     public bool UseProxies
@@ -612,6 +620,96 @@ public sealed partial class MainViewModel : ObservableObject
         if (Editor.Redo())
         {
             StatusText = "Wiederholt.";
+        }
+    }
+
+    // ---------------------------------------------------------------- Export
+
+    [RelayCommand]
+    public void Export()
+    {
+        if (!_tools.IsAvailable)
+        {
+            _dialogs.Error(_tools.StatusText);
+            return;
+        }
+
+        var vm = new ExportDialogViewModel(Project, ProjectName, _dialogs, _settings);
+        if (_dialogs.ShowDialog(vm) && vm.Result is { } job)
+        {
+            ExportQueue.Enqueue(job);
+            StatusText = $"Export gestartet: {job.FileName}";
+        }
+    }
+
+    /// <summary>Legt einen Export-Auftrag direkt an (ohne Dialog, z. B. für den Selbsttest).</summary>
+    public ExportJobViewModel EnqueueExport(Core.Export.ExportPreset preset, string outputPath, bool useRange)
+    {
+        var job = new ExportJobViewModel(Project.Clone(), preset, outputPath,
+            useRange && Project.HasRange ? Project.MarkIn : null, useRange && Project.HasRange ? Project.MarkOut : null);
+        ExportQueue.Enqueue(job);
+        return job;
+    }
+
+    [RelayCommand]
+    public async Task ExportStillAsync()
+    {
+        if (Core.Preview.PlaybackPlanner.VideoAt(Project, PlayheadFrame) is not { } source)
+        {
+            _dialogs.Error("Am Abspielkopf ist kein Bild.");
+            return;
+        }
+
+        var path = _dialogs.SaveFile("Einzelbild speichern", "PNG-Bild (*.png)|*.png",
+            $"{ProjectName} {Timecode.FromFrames(PlayheadFrame, Project.Settings.FrameRate).Replace(':', '-').Replace(';', '-')}.png",
+            _settings.Settings.LastExportFolder);
+        if (path is null)
+        {
+            return;
+        }
+
+        await ExportStillToAsync(path);
+    }
+
+    public async Task<bool> ExportStillToAsync(string path)
+    {
+        if (Core.Preview.PlaybackPlanner.VideoAt(Project, PlayheadFrame) is not { } source)
+        {
+            return false;
+        }
+
+        try
+        {
+            await _tools.Require().RunAsync(
+                Core.Export.FfmpegArgs.StillFrame(source.OriginalPath, source.OriginalSeconds, Core.Preview.PlaybackPlanner.PreviewColorFilter(source.Clip), path), 0);
+            StatusText = $"Einzelbild gespeichert: {Path.GetFileName(path)}";
+            return true;
+        }
+        catch (Exception ex) when (ex is Core.Media.FfmpegException or IOException or InvalidOperationException)
+        {
+            _dialogs.Error("Das Einzelbild konnte nicht gespeichert werden:\n" + ex.Message);
+            return false;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelExport(ExportJobViewModel? job)
+    {
+        if (job is not null)
+        {
+            ExportQueue.Cancel(job);
+        }
+    }
+
+    [RelayCommand]
+    private void ClearFinishedExports() => ExportQueue.ClearFinished();
+
+    [RelayCommand]
+    private void ShowExportInFolder(ExportJobViewModel? job)
+    {
+        if (job is { State: ExportJobState.Done } && File.Exists(job.OutputPath))
+        {
+            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{job.OutputPath}\"");
         }
     }
 

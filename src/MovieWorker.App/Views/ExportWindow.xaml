@@ -1,0 +1,95 @@
+<Window x:Class="MovieWorker.App.Views.ExportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Exportieren" Width="900" Height="620" MinWidth="720" MinHeight="480"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.Resources>
+        <CollectionViewSource x:Key="GroupedPresets" Source="{Binding Presets}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="CategoryLabel" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+    </Window.Resources>
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Exportieren" Width="130" IsDefault="True" Command="{Binding ExportCommand}" />
+            <Button Content="Abbrechen" Width="100" Margin="8,0,0,0" IsCancel="True" Command="{Binding CancelCommand}" />
+        </StackPanel>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Vorlage" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <ListBox ItemsSource="{Binding Source={StaticResource GroupedPresets}}" SelectedItem="{Binding SelectedPreset}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" Foreground="#555" Margin="2,8,0,2" />
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" Margin="6,2" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="{Binding SelectedPreset.Name}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding SelectedPreset.Description}" TextWrapping="Wrap" Foreground="#555" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding OutputText}" Margin="0,6,0,0" FontFamily="Consolas" />
+
+                    <StackPanel Visibility="{Binding CanReframe, Converter={StaticResource BoolToVisibility}}" Margin="0,10,0,0">
+                        <TextBlock Text="Anderes Seitenverhältnis" FontWeight="SemiBold" />
+                        <ComboBox ItemsSource="{Binding ReframeChoices}" SelectedItem="{Binding SelectedReframe}" Margin="0,4,0,0" />
+                    </StackPanel>
+
+                    <TextBlock Text="Bereich" FontWeight="SemiBold" Margin="0,12,0,4" />
+                    <RadioButton Content="Ganze Timeline" IsChecked="{Binding UseRange, Converter={StaticResource InverseBool}}" />
+                    <RadioButton Content="{Binding RangeText}" IsChecked="{Binding UseRange}" IsEnabled="{Binding HasRange}" Margin="0,4,0,0" />
+
+                    <TextBlock Text="Ziel" FontWeight="SemiBold" Margin="0,12,0,4" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition /><RowDefinition />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Dateiname" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding FileName, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="1" Text="Ordner" VerticalAlignment="Center" Margin="0,4,0,0" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" Text="{Binding Folder, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button Grid.Row="1" Grid.Column="2" Content="…" Width="30" Margin="6,4,0,0" Command="{Binding BrowseFolderCommand}" />
+                    </Grid>
+
+                    <TextBlock Text="Prüfung vor dem Export" FontWeight="SemiBold" Margin="0,14,0,4" />
+                    <TextBlock Text="✓ Alles in Ordnung." Foreground="#1E6B35"
+                               Visibility="{Binding HasNoIssues, Converter={StaticResource BoolToVisibility}}" />
+                    <ItemsControl ItemsSource="{Binding Issues}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="0,2">
+                                    <TextBlock DockPanel.Dock="Left" Text="{Binding Icon}" Width="22" />
+                                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Margin="0,12,0,0" Foreground="#666" TextWrapping="Wrap"
+                               Text="Exportiert wird immer aus den Originaldateien (nie aus Proxys). Der Auftrag läuft im Hintergrund – du kannst weiterschneiden; die Warteschlange steht rechts im Reiter „Export“." />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</Window>

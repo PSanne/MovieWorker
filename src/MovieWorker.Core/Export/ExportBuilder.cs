@@ -21,12 +21,28 @@ public static class ExportBuilder
 {
     private const string AudioFormat = "aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo";
 
-    public static FfmpegJob Build(MovieProject project, ExportPreset preset, string outputPath)
+    /// <param name="project">Das Projekt.</param>
+    /// <param name="preset">Die Export-Vorlage.</param>
+    /// <param name="outputPath">Zieldatei.</param>
+    /// <param name="rangeStart">Optional: erstes Bild des Bereichs (In-Marke).</param>
+    /// <param name="rangeEnd">Optional: Ende des Bereichs (Out-Marke, exklusiv).</param>
+    public static FfmpegJob Build(MovieProject project, ExportPreset preset, string outputPath, long? rangeStart = null, long? rangeEnd = null)
     {
+        long totalFrames;
+        if (rangeStart is { } rs && rangeEnd is { } re)
+        {
+            project = ExportRange.Extract(project, rs, re);
+            totalFrames = re - rs;
+        }
+        else
+        {
+            totalFrames = project.DurationFrames;
+        }
+
         var settings = project.Settings;
         var rate = settings.FrameRate;
-        var (width, height) = OutputSize(settings, preset);
-        var totalFrames = project.DurationFrames;
+        var (width, height) = CanvasSize(settings, preset);
+        var pixelFormat = preset.AudioOnly ? "yuv420p" : preset.PixelFormat;
         if (totalFrames <= 0)
         {
             throw new InvalidOperationException("Die Timeline ist leer – es gibt nichts zu exportieren.");
@@ -41,14 +57,14 @@ public static class ExportBuilder
         var videoTrack = project.VideoTracks.FirstOrDefault() ?? new TimelineTrack { Kind = TrackKind.Video };
         long cursor = 0;
         var segment = 0;
-        foreach (var clip in videoTrack.OrderedClips.Append(null))
+        foreach (var clip in videoTrack.OrderedClips.Where(c => c.SourcePaths.Count > 0 && c.HasVideo).Append(null))
         {
             var gapEnd = clip?.StartFrame ?? totalFrames;
             if (gapEnd > cursor)
             {
                 var gap = FfmpegArgs.Seconds(rate.FramesToSeconds(gapEnd - cursor));
                 graph.Append(CultureInfo.InvariantCulture,
-                    $"color=c=black:s={width}x{height}:r={rate.ToFfmpeg()}:d={gap},format={preset.PixelFormat},setsar=1[v{segment}];");
+                    $"color=c=black:s={width}x{height}:r={rate.ToFfmpeg()}:d={gap},format={pixelFormat},setsar=1[v{segment}];");
                 graph.Append(CultureInfo.InvariantCulture,
                     $"anullsrc=r=48000:cl=stereo,atrim=duration={gap}[a{segment}];");
                 segmentLabels.Add($"[v{segment}][a{segment}]");
@@ -90,7 +106,7 @@ public static class ExportBuilder
                 vf.Add($"fade=t=out:st={FfmpegArgs.Seconds(duration - d)}:d={FfmpegArgs.Seconds(d)}");
             }
 
-            vf.Add($"format={preset.PixelFormat}");
+            vf.Add($"format={pixelFormat}");
             graph.Append(CultureInfo.InvariantCulture, $"{videoIn}{string.Join(',', vf)}[v{segment}];");
 
             // Kameraton
@@ -115,7 +131,11 @@ public static class ExportBuilder
         }
 
         graph.Append(CultureInfo.InvariantCulture,
-            $"{string.Concat(segmentLabels)}concat=n={segmentLabels.Count}:v=1:a=1[vout][acam];");
+            $"{string.Concat(segmentLabels)}concat=n={segmentLabels.Count}:v=1:a=1[vcat][acam];");
+
+        // ---------- Ausgabeformat (Hochformat, Quadrat …) und Bildrate ----------
+        var outputRate = OutputFrameRate(rate, preset);
+        graph.Append(CultureInfo.InvariantCulture, $"[vcat]{OutputStage(width, height, preset, rate, outputRate)}[vout];");
 
         // ---------- Tonspuren ----------
         var mixLabels = new List<string> { "[acam]" };
@@ -153,27 +173,107 @@ public static class ExportBuilder
                 $"{string.Concat(mixLabels)}amix=inputs={mixLabels.Count}:duration=first:normalize=0[aout]");
         }
 
+        if (preset.AudioOnly)
+        {
+            graph.Append(";[vout]nullsink");
+        }
+
         var args = new List<string> { "-y", "-v", "error", "-nostdin" };
         args.AddRange(inputs);
-        args.AddRange(["-filter_complex", graph.ToString(), "-map", "[vout]", "-map", "[aout]"]);
-        args.AddRange(preset.VideoArguments);
-        args.AddRange(["-pix_fmt", preset.PixelFormat, "-r", rate.ToFfmpeg()]);
-        args.AddRange(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]);
+        args.AddRange(["-filter_complex", graph.ToString()]);
+        if (!preset.AudioOnly)
+        {
+            args.AddRange(["-map", "[vout]"]);
+        }
+
+        args.AddRange(["-map", "[aout]"]);
+        if (!preset.AudioOnly)
+        {
+            args.AddRange(preset.VideoArguments);
+            args.AddRange(["-pix_fmt", preset.PixelFormat, "-r", outputRate.ToFfmpeg()]);
+            args.AddRange(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]);
+        }
+
         args.AddRange(preset.AudioArguments);
         args.AddRange(["-ar", "48000", "-progress", "pipe:1", "-nostats", outputPath]);
         return new FfmpegJob(args, rate.FramesToSeconds(totalFrames), outputPath);
     }
 
-    /// <summary>Ausgabegröße – bei Vorlagen mit Höchstgröße proportional verkleinert (immer gerade Zahlen).</summary>
-    public static (int Width, int Height) OutputSize(ProjectSettings settings, ExportPreset preset)
+    /// <summary>Endgültige Größe der exportierten Datei.</summary>
+    public static (int Width, int Height) OutputSize(ProjectSettings settings, ExportPreset preset) =>
+        preset.HasFixedSize ? (preset.OutputWidth!.Value, preset.OutputHeight!.Value) : CanvasSize(settings, preset);
+
+    /// <summary>
+    /// Größe, auf die alle Clips gebracht werden: die Projektauflösung, bei Vorlagen mit Höchstgröße proportional
+    /// verkleinert; bei festen Ausgabegrößen (z. B. 1080×1920) nur so groß wie nötig (spart Rechenzeit). Immer gerade Zahlen.
+    /// </summary>
+    public static (int Width, int Height) CanvasSize(ProjectSettings settings, ExportPreset preset)
     {
-        if (preset.MaxHeight is not { } max || settings.Height <= max)
+        var limit = preset.HasFixedSize
+            ? Math.Max(preset.OutputWidth!.Value, preset.OutputHeight!.Value)
+            : preset.MaxHeight;
+        if (limit is not { } max || settings.Height <= max)
         {
             return (settings.Width, settings.Height);
         }
 
         var width = (int)Math.Round(settings.Width * (double)max / settings.Height / 2) * 2;
         return (width, max);
+    }
+
+    /// <summary>Bildrate der Ausgabe – Vorlagen mit Obergrenze halbieren z. B. 119,88 auf 59,94.</summary>
+    public static Time.FrameRate OutputFrameRate(Time.FrameRate rate, ExportPreset preset)
+    {
+        var result = rate;
+        while (preset.MaxFrameRate is { } max && result.Value > max + 0.01)
+        {
+            result = new Time.FrameRate(result.Numerator, result.Denominator * 2);
+        }
+
+        return result;
+    }
+
+    /// <summary>Letzte Bildstufe: an ein festes Format anpassen (Hochformat, Quadrat) und ggf. Bildrate senken.</summary>
+    public static string OutputStage(int canvasWidth, int canvasHeight, ExportPreset preset, Time.FrameRate rate, Time.FrameRate outputRate)
+    {
+        var steps = new List<string>();
+        if (!outputRate.Equals(rate))
+        {
+            steps.Add($"fps={outputRate.ToFfmpeg()}");
+        }
+
+        if (preset.HasFixedSize)
+        {
+            var w = preset.OutputWidth!.Value;
+            var h = preset.OutputHeight!.Value;
+            var sameAspect = Math.Abs((double)canvasWidth / canvasHeight - (double)w / h) < 0.01;
+            var fit = $"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2";
+            var fill = $"scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,crop={w}:{h}";
+            if (sameAspect)
+            {
+                steps.Add($"scale={w}:{h}:flags=lanczos");
+            }
+            else if (preset.Reframe == ReframeMode.Fill)
+            {
+                steps.Add(fill);
+            }
+            else if (preset.Reframe == ReframeMode.Fit)
+            {
+                steps.Add(fit);
+            }
+            else
+            {
+                // Unscharfer Hintergrund: Kopie bildfüllend + stark weichgezeichnet, darüber das ganze Bild.
+                var pre = steps.Count > 0 ? string.Join(',', steps) + "," : string.Empty;
+                return $"{pre}split[bgsrc][fgsrc];[bgsrc]{fill},boxblur=luma_radius=40:luma_power=2,eq=brightness=-0.08[bg];"
+                    + $"[fgsrc]scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1,format={preset.PixelFormat}";
+            }
+
+            steps.Add("setsar=1");
+        }
+
+        steps.Add(preset.AudioOnly ? "null" : $"format={preset.PixelFormat}");
+        return string.Join(',', steps);
     }
 
     /// <summary>

@@ -7,8 +7,8 @@ Es ist auf Material der **Canon EOS R6 Mark II** und der **Canon EOS 70D** zuges
 professionelle Videos machen: vom Import der Speicherkarte über den Schnitt bis zum Export als
 H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 
-> **Stand: Sprint 4 von 16 abgeschlossen.** Import, Medienpool, Schnitt, Wiedergabe und Proxys funktionieren.
-> Als Nächstes folgt der Export-Dialog (dann ist Version 0.5 die erste voll nutzbare Version). Den kompletten Plan findest du in
+> **Stand: Version 0.5 – Sprint 5 von 16 abgeschlossen.** Die erste voll nutzbare Version: importieren, schneiden,
+> abspielen und für YouTube, Instagram/TikTok oder als Master exportieren. Den kompletten Plan findest du in
 > **[docs/SPRINTS.md](docs/SPRINTS.md)**.
 
 ## Was MovieWorker über deine Kameras weiß
@@ -34,6 +34,7 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | **Clip-Inspektor** | Position und Länge als Timecode · Geschwindigkeit (Zeitlupe/Zeitraffer) · „Als Zeitlupe abspielen“ für 150/180-fps-Clips · Lautstärke, Ton stumm, Ein-/Ausblenden |
 | **Monitore** | *Quelle*: Aufnahme ansehen, In/Out setzen, Ausschnitt ans Ende oder am Abspielkopf einfügen · *Programm*: Timeline abspielen; im Stillstand exaktes Standbild mit LUT/HDR-Umrechnung wie im Export · J/K/L-Shuttle |
 | **Proxys** | Für Aufnahmen, die Windows nicht flüssig abspielt (4K-HEVC 10 Bit 4:2:2, HDR, MOV mit LPCM), entsteht automatisch eine Vorschaudatei: 70D-Clips werden nur neu verpackt (Sekunden), R6-HEVC wird als 540p-H.264 kodiert, HDR dabei nach SDR umgerechnet · geteilte Aufnahmen ergeben einen Proxy · Menü *Wiedergabe → Vorschau mit Proxys* schaltet aufs Original um · der Export nutzt immer die Originale |
+| **Export** | *Datei → Exportieren* (Strg+E): Vorlagen für YouTube (4K/HD, H.264/H.265), Vimeo, Instagram Reels/TikTok/Shorts (9:16), Instagram-Quadrat und 4:5, Master (ProRes 422 HQ/LT, DNxHR HQX), Archiv (H.265 10 Bit), nur Ton (WAV/MP3) · anderes Seitenverhältnis: unscharfer Rand, zuschneiden oder schwarz · ganze Timeline oder In/Out-Bereich · **Prüfung vor dem Export** (fehlende Dateien/LUT, Canon Log 3 ohne LUT, nicht konformierte Zeitlupe, Hochskalierung) · **Warteschlange** mit Fortschritt, Restzeit und Abbrechen – weiterschneiden während des Exports · Einzelbild als PNG (Strg+Umschalt+E) |
 | **Projekte** | Neu, Öffnen, Speichern (`.mvproj`), zuletzt geöffnete Projekte · Projekteinstellungen (Auflösung, Bildrate, Drop-Frame) · der erste Videoclip bestimmt die Einstellungen eines leeren Projekts |
 
 ### Tastenkürzel
@@ -53,6 +54,7 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | Waagerecht scrollen | Mausrad über der Timeline |
 | Rückgängig / Wiederholen | Strg+Z / Strg+Y |
 | Neu / Öffnen / Speichern | Strg+N / Strg+O / Strg+S |
+| Exportieren / Einzelbild | Strg+E / Strg+Umschalt+E |
 
 ## Funktionen des Kerns (Sprint 1)
 
@@ -135,6 +137,11 @@ einzigen ffmpeg-Aufruf übersetzt, jeder Clip wird per schnellem Seek nur so wei
   wird nachgeführt. So stimmt die Position auch bei Lücken, Spurwechseln und Dateien, die Windows nicht abspielen
   kann (dann zeigt der Monitor Standbilder). Im Stillstand rechnet ffmpeg ein exaktes Bild – mit derselben
   Farbumrechnung wie der Export.
+- **Export-Aufträge arbeiten mit einer Kopie des Projekts.** So kann man während eines langen Exports weiterschneiden,
+  ohne das Ergebnis zu verändern. Exportiert wird in eine `.part`-Datei, die erst am Ende umbenannt wird – ein
+  abgebrochener Export hinterlässt keine halbe Datei.
+- **Hochformat mit unscharfem Rand als Standard.** Bei 16:9-Material auf 9:16 bleibt so das ganze Bild sichtbar;
+  wer lieber zuschneidet, stellt im Export-Dialog „Bildfüllend zuschneiden“ ein.
 - **Proxys nur, wo nötig.** MP4 mit H.264 spielt Windows direkt; 70D-MOVs werden nur neu verpackt, nur HEVC/10 Bit/HDR
   wird neu kodiert. Proxys liegen in `%LocalAppData%\MovieWorker\Proxys` und werden nie exportiert.
 - **Canon Log 3 wird über die Bit-Tiefe erkannt:** Die R6 Mark II nimmt 10 Bit nur mit Canon Log 3 oder HDR PQ auf;

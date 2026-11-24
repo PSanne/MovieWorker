@@ -39,6 +39,14 @@ public partial class MainWindow : Window
         Timeline.ViewChanged += (_, _) => SyncScrollBar();
         Loaded += (_, _) => SyncScrollBar();
         SourceMonitor.Attach(viewModel);
+        viewModel.ExportQueue.Jobs.CollectionChanged += (_, _) =>
+        {
+            EmptyQueueHint.Visibility = viewModel.ExportQueue.Jobs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (viewModel.ExportQueue.Jobs.Count > 0)
+            {
+                ExportTab.IsSelected = true;
+            }
+        };
         ProgramMonitor.Attach(viewModel);
 
         UpdateEmptyHint();

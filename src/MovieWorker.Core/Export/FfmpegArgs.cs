@@ -70,6 +70,19 @@ public static class FfmpegArgs
         ];
     }
 
+    /// <summary>Einzelbild in voller Auflösung als PNG-Datei (mit Farbumrechnung des Clips).</summary>
+    public static IReadOnlyList<string> StillFrame(string path, double seconds, string? colorFilter, string output)
+    {
+        var args = new List<string> { "-y", "-v", "error", "-ss", Seconds(seconds), "-i", path, "-frames:v", "1" };
+        if (colorFilter is not null)
+        {
+            args.AddRange(["-vf", colorFilter]);
+        }
+
+        args.Add(output);
+        return args;
+    }
+
     /// <summary>
     /// Proxy für flüssige Vorschau: 540p H.264 mit kurzen GOPs (schnelles Springen), Ton als AAC.
     /// </summary>
