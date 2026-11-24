@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using MovieWorker.Core.Time;
 
 namespace MovieWorker.Core.Media;
@@ -32,9 +33,11 @@ public sealed record VideoStreamInfo(
     string? ColorTransferRaw,
     string? ColorPrimariesRaw)
 {
+    [JsonIgnore]
     public bool IsUhd => Width >= 3840;
 
     /// <summary>Kurzbezeichnung wie „HEVC 10 Bit 4:2:2“.</summary>
+    [JsonIgnore]
     public string CodecLabel
     {
         get
@@ -55,8 +58,10 @@ public sealed record VideoStreamInfo(
 /// <summary>Technische Daten des Tonstroms.</summary>
 public sealed record AudioStreamInfo(string Codec, int SampleRate, int Channels, int? BitsPerSample)
 {
+    [JsonIgnore]
     public bool IsLinearPcm => Codec.StartsWith("pcm_", StringComparison.Ordinal);
 
+    [JsonIgnore]
     public string Label => IsLinearPcm
         ? $"LPCM {SampleRate / 1000.0:0.#} kHz{(BitsPerSample is { } b ? $" {b} Bit" : string.Empty)}"
         : $"{Codec.ToUpperInvariant()} {SampleRate / 1000.0:0.#} kHz";
@@ -73,13 +78,40 @@ public sealed record MediaInfo(
     AudioStreamInfo? Audio,
     IReadOnlyDictionary<string, string> Tags)
 {
+    [JsonIgnore]
     public string FileName => System.IO.Path.GetFileName(Path);
 
+    [JsonIgnore]
     public bool HasVideo => Video is not null;
 
+    [JsonIgnore]
     public bool HasAudio => Audio is not null;
 
     /// <summary>Kennlinie aus den Metadaten (Canon Log 3 lässt sich daraus allein nicht erkennen – siehe CanonCameraDetector).</summary>
+    /// <summary>Kurzbeschreibung wie „3840×2160 · 23,976 fps · H.265/HEVC 10 Bit 4:2:2 · AAC 48 kHz“.</summary>
+    [JsonIgnore]
+    public string Summary
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (Video is { } v)
+            {
+                parts.Add($"{v.Width}×{v.Height}");
+                parts.Add($"{v.FrameRate} fps");
+                parts.Add(v.CodecLabel);
+            }
+
+            if (Audio is { } a)
+            {
+                parts.Add(a.Label);
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
+
+    [JsonIgnore]
     public ColorTransfer MetadataTransfer => Video?.ColorTransferRaw switch
     {
         "smpte2084" => ColorTransfer.HdrPq,

@@ -31,11 +31,18 @@ public static class CanonCameraDetector
     /// <summary>Ab dieser Bildrate gilt ein Clip als Zeitlupen-Material (High Frame Rate).</summary>
     public const double HighFrameRateThreshold = 61;
 
-    public static CameraDetection Detect(MediaInfo media)
+    /// <param name="media">Der Clip.</param>
+    /// <param name="manualCamera">Von Hand festgelegte Kamera – hat Vorrang vor der Erkennung.</param>
+    public static CameraDetection Detect(MediaInfo media, CanonCamera? manualCamera = null)
     {
         var camera = DetectFromTags(media, out var certain);
         var confidence = certain ? DetectionConfidence.Certain : DetectionConfidence.Unknown;
-        if (camera == CanonCamera.Unknown)
+        if (manualCamera is { } manual)
+        {
+            camera = manual;
+            confidence = DetectionConfidence.Certain;
+        }
+        else if (camera == CanonCamera.Unknown)
         {
             camera = DetectFromFormat(media);
             confidence = camera == CanonCamera.Unknown ? DetectionConfidence.Unknown : DetectionConfidence.Likely;

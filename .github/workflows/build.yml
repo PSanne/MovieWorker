@@ -10,11 +10,22 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
+
+      - uses: actions/cache@v4
+        with:
+          path: tools/ffmpeg
+          key: ffmpeg-win64-gpl-v1
+
+      - name: FFmpeg holen
+        shell: pwsh
+        run: |
+          ./build/get-ffmpeg.ps1 -Destination tools/ffmpeg
+          Add-Content $env:GITHUB_PATH "$PWD\tools\ffmpeg"
 
       - name: Restore
         run: dotnet restore MovieWorker.sln
@@ -24,3 +35,32 @@ jobs:
 
       - name: Test
         run: dotnet test MovieWorker.sln --configuration Release --no-build --verbosity normal
+
+      # Erzeugt eine einzelne MovieWorker.exe, die ohne installiertes .NET läuft, plus FFmpeg im Unterordner.
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish src/MovieWorker.App/MovieWorker.App.csproj `
+            --configuration Release --runtime win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output publish
+          Copy-Item tools/ffmpeg publish/ffmpeg -Recurse
+
+      - name: Testclips erzeugen
+        shell: pwsh
+        run: ./build/make-test-media.ps1 -Output smoke-media
+
+      - name: Selbsttest der App (echte Oberfläche)
+        shell: pwsh
+        run: ./build/run-smoke-test.ps1 -Exe publish/MovieWorker.exe -Media smoke-media -Log smoke-out/smoke.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Selbsttest-Protokoll
+          path: smoke-out
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MovieWorker-win-x64
+          path: publish

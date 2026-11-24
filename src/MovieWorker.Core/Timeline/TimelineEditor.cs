@@ -1,5 +1,6 @@
 using MovieWorker.Core.Camera;
 using MovieWorker.Core.Media;
+using MovieWorker.Core.Projects;
 
 namespace MovieWorker.Core.Timeline;
 
@@ -30,14 +31,57 @@ public sealed class TimelineEditor
         OnChanged();
     }
 
+    /// <summary>Nimmt Aufnahmen in den Medienpool auf (doppelte Dateien werden übersprungen). Nicht Teil von Rückgängig.</summary>
+    public IReadOnlyList<MediaItem> AddMedia(IEnumerable<MediaItem> items)
+    {
+        var known = Project.Media.SelectMany(m => m.Parts).Select(p => p.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var added = items.Where(i => i.Parts.Count > 0 && !i.Parts.Any(p => known.Contains(p.Path))).ToList();
+        Project.Media.AddRange(added);
+        if (added.Count > 0)
+        {
+            OnChanged();
+        }
+
+        return added;
+    }
+
+    /// <summary>Entfernt eine Aufnahme aus dem Medienpool – nur, wenn sie in der Timeline nicht verwendet wird.</summary>
+    public bool RemoveMedia(Guid mediaId)
+    {
+        if (Project.AllClips.Any(c => c.MediaId == mediaId))
+        {
+            return false;
+        }
+
+        var removed = Project.Media.RemoveAll(m => m.Id == mediaId) > 0;
+        if (removed)
+        {
+            OnChanged();
+        }
+
+        return removed;
+    }
+
+    /// <summary>Meldet eine Änderung am Medienpool (z. B. Proxy fertig, Kamera geändert).</summary>
+    public void NotifyMediaChanged() => OnChanged();
+
+    /// <summary>Erzeugt einen Clip aus einem Eintrag im Medienpool.</summary>
+    public TimelineClip CreateClip(MediaItem media, double sourceIn = 0, double? sourceOut = null)
+    {
+        var clip = CreateClip(media.Recording, sourceIn, sourceOut, media.CameraOverride);
+        clip.MediaId = media.Id;
+        clip.Name = media.Name;
+        return clip;
+    }
+
     /// <summary>Erzeugt einen Clip aus einer (ggf. geteilten) Aufnahme.</summary>
-    public TimelineClip CreateClip(RecordingGroup recording, double sourceIn = 0, double? sourceOut = null)
+    public TimelineClip CreateClip(RecordingGroup recording, double sourceIn = 0, double? sourceOut = null, Camera.CanonCamera? camera = null)
     {
         var first = recording.First;
         var total = recording.TotalDuration.TotalSeconds;
         var outPoint = Math.Clamp(sourceOut ?? total, 0, total);
         var inPoint = Math.Clamp(sourceIn, 0, outPoint);
-        var detection = CanonCameraDetector.Detect(first);
+        var detection = CanonCameraDetector.Detect(first, camera);
         var rate = Project.Settings.FrameRate;
 
         return new TimelineClip
@@ -346,6 +390,7 @@ public sealed class TimelineEditor
             return false;
         }
 
+        state.Media = Project.Media; // Der Medienpool ist nicht Teil von Rückgängig.
         Project = state;
         OnChanged();
         return true;

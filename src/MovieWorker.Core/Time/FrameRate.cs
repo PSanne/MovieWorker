@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 
 namespace MovieWorker.Core.Time;
 
@@ -8,6 +9,7 @@ namespace MovieWorker.Core.Time;
 /// </summary>
 public readonly record struct FrameRate
 {
+    [JsonConstructor]
     public FrameRate(int numerator, int denominator = 1)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(numerator);
@@ -31,15 +33,19 @@ public readonly record struct FrameRate
     public static FrameRate Fps60 => new(60);
 
     /// <summary>Bildrate als Kommazahl, z. B. 29,97002997.</summary>
+    [JsonIgnore]
     public double Value => (double)Numerator / Denominator;
 
     /// <summary>Gerundete Bildrate für den Timecode (29,97 → 30).</summary>
+    [JsonIgnore]
     public int NominalFps => (int)Math.Round(Value);
 
     /// <summary>NTSC-Raten 29,97 und 59,94 können Drop-Frame-Timecode verwenden.</summary>
+    [JsonIgnore]
     public bool SupportsDropFrame => Denominator == 1001 && (Numerator == 30000 || Numerator == 60000);
 
     /// <summary>Dauer eines Bildes in Sekunden.</summary>
+    [JsonIgnore]
     public double FrameDuration => (double)Denominator / Numerator;
 
     public double FramesToSeconds(long frames) => frames * (double)Denominator / Numerator;

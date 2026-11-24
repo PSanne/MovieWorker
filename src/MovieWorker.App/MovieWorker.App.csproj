@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>MovieWorker.App</RootNamespace>
+    <AssemblyName>MovieWorker</AssemblyName>
+    <!-- Erlaubt das Bauen auch außerhalb von Windows (z. B. in CI); ausführen lässt sich die App nur unter Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MovieWorker.Core\MovieWorker.Core.csproj" />
+  </ItemGroup>
+
+</Project>

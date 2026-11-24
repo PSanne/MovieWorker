@@ -1,0 +1,20 @@
+<Window x:Class="MovieWorker.App.Views.ProjectSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Projekteinstellungen" Width="460" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False">
+    <StackPanel Margin="14">
+        <TextBlock Text="Auflösung" FontWeight="SemiBold" />
+        <ComboBox ItemsSource="{Binding Resolutions}" SelectedItem="{Binding SelectedResolution}" Margin="0,4,0,10" />
+        <TextBlock Text="Bildrate" FontWeight="SemiBold" />
+        <ComboBox ItemsSource="{Binding FrameRates}" SelectedItem="{Binding SelectedFrameRate}" Margin="0,4,0,6" />
+        <CheckBox Content="Drop-Frame-Timecode (nur 29,97 / 59,94)" IsChecked="{Binding DropFrame}"
+                  IsEnabled="{Binding CanUseDropFrame}" Margin="0,4,0,10" />
+        <TextBlock Foreground="#666" TextWrapping="Wrap"
+                   Text="Tipp: In Europa sind 25 fps üblich (EOS 70D und R6 Mark II im PAL-Modus). Clips mit anderer Bildrate werden beim Export angepasst; Zeitlupen-Clips lassen sich konformieren." />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="OK" Width="90" IsDefault="True" Click="OnOk" />
+            <Button Content="Abbrechen" Width="90" Margin="8,0,0,0" IsCancel="True" />
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -117,7 +117,7 @@ public class MediaAndCameraTests
             TestMedia.Eos70D("/card/DCIM/100CANON/MVI_0013.MOV", 500_000_000),
         };
 
-        var groups = SplitRecordingDetector.Group(files.Reverse());
+        var groups = SplitRecordingDetector.Group(files.AsEnumerable().Reverse());
         Assert.Equal(2, groups.Count);
         Assert.Equal(3, groups[0].Parts.Count);
         Assert.Equal("MVI_0010.MOV (+2 Teile)", groups[0].DisplayName);

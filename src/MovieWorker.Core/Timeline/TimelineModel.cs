@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using MovieWorker.Core.Media;
+using MovieWorker.Core.Projects;
 using MovieWorker.Core.Time;
 
 namespace MovieWorker.Core.Timeline;
@@ -78,6 +79,9 @@ public sealed class ProjectSettings
 public sealed class TimelineClip
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <summary>Verweis auf den Eintrag im Medienpool (für Proxy und Kamera-Infos).</summary>
+    public Guid? MediaId { get; set; }
 
     /// <summary>Pfade der Quelldatei(en) – mehrere bei an der 4-GB-Grenze geteilten Aufnahmen.</summary>
     public List<string> SourcePaths { get; set; } = [];
@@ -189,6 +193,11 @@ public sealed class MovieProject
 
     public List<TimelineTrack> Tracks { get; set; } = [];
 
+    /// <summary>Medienpool: alle importierten Aufnahmen (auch die, die noch nicht in der Timeline liegen).</summary>
+    public List<MediaItem> Media { get; set; } = [];
+
+    public MediaItem? FindMedia(Guid? id) => id is { } value ? Media.FirstOrDefault(m => m.Id == value) : null;
+
     [JsonIgnore]
     public IEnumerable<TimelineTrack> VideoTracks => Tracks.Where(t => t.Kind == TrackKind.Video);
 
@@ -232,5 +241,6 @@ public sealed class MovieProject
         FormatVersion = FormatVersion,
         Settings = Settings.Clone(),
         Tracks = Tracks.Select(t => t.Clone()).ToList(),
+        Media = [.. Media],
     };
 }
