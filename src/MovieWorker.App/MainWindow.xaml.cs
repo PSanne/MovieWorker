@@ -52,6 +52,7 @@ public partial class MainWindow : Window
         };
         viewModel.Recording.StopPlaybackRequested += (_, _) => ProgramMonitor.Pause();
         EffectNodes.SelectionChanged += (_, _) => UpdateMaskOutline();
+        viewModel.ThemeChanged += (_, _) => EffectNodes.InvalidateVisual();
         viewModel.EffectsTabRequested += (_, _) =>
         {
             EffectsTab.IsSelected = true;
@@ -115,6 +116,7 @@ public partial class MainWindow : Window
     {
         if (_allowClose || !_viewModel.IsDirty)
         {
+            _viewModel.EndSession();
             base.OnClosing(e);
             return;
         }
@@ -162,6 +164,9 @@ public partial class MainWindow : Window
         var sourceFocused = SourceMonitor.IsKeyboardFocusWithin;
         switch (e.Key)
         {
+            case Key.F1:
+                ShowHelp();
+                break;
             case Key.Space:
                 if (sourceFocused) SourceMonitor.TogglePlay(); else ProgramMonitor.TogglePlay();
                 break;
@@ -472,4 +477,22 @@ public partial class MainWindow : Window
         EmptyPoolHint.Visibility = _viewModel.MediaItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     private void ShowMixer_Click(object sender, RoutedEventArgs e) => AudioTab.IsSelected = true;
+
+    private Views.HelpWindow? _help;
+
+    private void ShowHelp_Click(object sender, RoutedEventArgs e) => ShowHelp();
+
+    /// <summary>Anleitung öffnen (nicht modal – sie kann beim Arbeiten offen bleiben).</summary>
+    public Views.HelpWindow ShowHelp()
+    {
+        if (_help is { IsLoaded: true })
+        {
+            _help.Activate();
+            return _help;
+        }
+
+        _help = new Views.HelpWindow { Owner = this };
+        _help.Show();
+        return _help;
+    }
 }

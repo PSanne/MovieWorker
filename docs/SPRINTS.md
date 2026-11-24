@@ -21,7 +21,7 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | ✅ fertig |
 | 14 | Ton II: ADR, Sprachaufnahme, Surround/räumlicher Ton | ✅ fertig |
 | 15 | Effekte & Compositing: Keying, Masken, Tracking, Knoten-Editor | ✅ fertig |
-| 16 | Feinschliff & Version 1.0 | ⏳ als Nächstes |
+| 16 | Feinschliff & Version 1.0 | ✅ fertig |
 
 ---
 
@@ -123,7 +123,7 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Masken und Tracking für Effekte (z. B. Gesichter oder Kennzeichen verpixeln)
 - Knoten-Editor für Effektketten (Reihenfolge ziehen, an/aus), Effekte kopieren/einfügen
 
-## Sprint 16 – Feinschliff & Version 1.0
-- GPU-Export (NVIDIA NVENC, Intel Quick Sync), schnellere Vorschau
-- Automatisches Speichern und Wiederherstellung nach Absturz
-- Gestaltung der Oberfläche, Anleitung, Installer
+## Sprint 16 – Feinschliff & Version 1.0 ✅
+- GPU-Export (NVIDIA NVENC, Intel Quick Sync, AMD AMF) mit echter Erkennung und automatischem Rückfall auf den Prozessor
+- Automatisches Speichern und Wiederherstellung nach Absturz, Sicherungskopie beim Speichern
+- Gestaltung: dunkles Design, Programmsymbol; eingebaute Anleitung (F1); Windows-Installer (Inno Setup)

@@ -1,10 +1,11 @@
 <Window x:Class="MovieWorker.App.MainWindow"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:MovieWorker.App.ViewModels"
         xmlns:c="clr-namespace:MovieWorker.App.Controls"
         Title="{Binding WindowTitle}" Width="1440" Height="900" MinWidth="1000" MinHeight="650"
-        WindowStartupLocation="CenterScreen" AllowDrop="True">
+        WindowStartupLocation="CenterScreen" AllowDrop="True" Icon="/Assets/MovieWorker.ico">
     <Window.InputBindings>
         <KeyBinding Key="N" Modifiers="Control" Command="{Binding NewProjectCommand}" />
         <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenProjectCommand}" />
@@ -131,9 +132,13 @@
                 <MenuItem Header="Spur des Clips bei _Sprache absenken (Ducking)" Command="{Binding DuckSelectedTrackCommand}" />
             </MenuItem>
             <MenuItem Header="_Extras">
+                <MenuItem Header="_Dunkles Design" IsCheckable="True" IsChecked="{Binding DarkTheme}" />
+                <Separator />
                 <MenuItem Header="_FFmpeg-Ordner festlegen …" Command="{Binding SetFfmpegFolderCommand}" />
             </MenuItem>
             <MenuItem Header="_Hilfe">
+                <MenuItem Header="_Anleitung" InputGestureText="F1" Click="ShowHelp_Click" />
+                <Separator />
                 <MenuItem Header="_Kameraprofile" Command="{Binding ShowCameraProfilesCommand}" />
                 <MenuItem Header="Ü_ber MovieWorker" Command="{Binding ShowAboutCommand}" />
             </MenuItem>
@@ -227,7 +232,7 @@
                                     </Grid.ColumnDefinitions>
                                     <Border Width="120" Height="68" Background="#222" CornerRadius="2">
                                         <Grid>
-                                            <TextBlock Text="{Binding KindIcon}" Foreground="#888" FontSize="22"
+                                            <TextBlock Text="{Binding KindIcon}" Foreground="{DynamicResource Brush.SubText}" FontSize="22"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
                                             <Border Background="#B0000000" HorizontalAlignment="Right" VerticalAlignment="Bottom" Padding="3,0">
@@ -237,10 +242,10 @@
                                     </Border>
                                     <StackPanel Grid.Column="1">
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding CameraLabel}" FontSize="11" Foreground="#555" />
+                                        <TextBlock Text="{Binding CameraLabel}" FontSize="11" Foreground="{DynamicResource Brush.SubText}" />
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Stars}" FontSize="11" Foreground="#C88A00" />
-                                            <TextBlock Text="{Binding SceneTakeText}" FontSize="11" Foreground="#555" Margin="6,0,0,0" />
+                                            <TextBlock Text="{Binding SceneTakeText}" FontSize="11" Foreground="{DynamicResource Brush.SubText}" Margin="6,0,0,0" />
                                             <TextBlock Text=" 🔗" FontSize="11" ToolTip="Mit externem Ton synchronisiert"
                                                        Visibility="{Binding HasSync, Converter={StaticResource BoolToVisibility}}" />
                                         </StackPanel>
@@ -306,13 +311,13 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                                     </Grid.RowDefinitions>
-                                    <TextBlock Text="Anfang" Foreground="#666" />
+                                    <TextBlock Text="Anfang" Foreground="{DynamicResource Brush.SubText}" />
                                     <TextBlock Grid.Column="1" Text="{Binding StartText}" FontFamily="Consolas" />
-                                    <TextBlock Grid.Row="1" Text="Ende" Foreground="#666" />
+                                    <TextBlock Grid.Row="1" Text="Ende" Foreground="{DynamicResource Brush.SubText}" />
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding EndText}" FontFamily="Consolas" />
-                                    <TextBlock Grid.Row="2" Text="Länge" Foreground="#666" />
+                                    <TextBlock Grid.Row="2" Text="Länge" Foreground="{DynamicResource Brush.SubText}" />
                                     <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LengthText}" FontFamily="Consolas" />
-                                    <TextBlock Grid.Row="3" Text="Aus Quelle" Foreground="#666" />
+                                    <TextBlock Grid.Row="3" Text="Aus Quelle" Foreground="{DynamicResource Brush.SubText}" />
                                     <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SourceText}" />
                                 </Grid>
 
@@ -549,7 +554,7 @@
                                                     Command="{Binding DataContext.TrackMaskCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                                             <Button DockPanel.Dock="Left" Content="Löschen" Padding="6,1" Margin="4,0,0,0"
                                                     Command="{Binding DataContext.ClearTrackingCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                            <TextBlock Text="{Binding TrackText}" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="#666" />
+                                            <TextBlock Text="{Binding TrackText}" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="{DynamicResource Brush.SubText}" />
                                         </DockPanel>
                                     </Grid>
                                 </StackPanel>
@@ -706,7 +711,7 @@
                                 <TextBlock Text="Knoten-Editor" Style="{StaticResource SectionHeader}" />
                                 <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
                                            Text="Die Effekte wirken von oben nach unten. Klick wählt, Ziehen ändert die Reihenfolge, Doppelklick schaltet an/aus (Strg+↑/↓ verschiebt)." />
-                                <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="3" Margin="0,4,0,0">
+                                <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3" Margin="0,4,0,0">
                                     <c:EffectNodeEditor x:Name="EffectNodes" MinHeight="100" />
                                 </Border>
 
@@ -836,7 +841,7 @@
                                         <ComboBox Margin="0,2" ItemsSource="{Binding Cues}" SelectedItem="{Binding SelectedCue}" />
                                     </DockPanel>
                                     <StackPanel Visibility="{Binding HasCue, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="Dialog (zum Ablesen)" FontSize="11" Foreground="#666" Margin="0,4,0,0" />
+                                        <TextBlock Text="Dialog (zum Ablesen)" FontSize="11" Foreground="{DynamicResource Brush.SubText}" Margin="0,4,0,0" />
                                         <TextBox Text="{Binding Dialog, UpdateSourceTrigger=LostFocus}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="40" FontSize="14" />
                                         <ItemsControl ItemsSource="{Binding Takes}" Margin="0,4,0,0">
                                             <ItemsControl.ItemTemplate>
@@ -887,14 +892,14 @@
                             <ItemsControl ItemsSource="{Binding Strips}" x:Name="MixerStrips">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:MixerStripViewModel}">
-                                        <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="3" Padding="6" Margin="0,4,0,2" Background="White">
+                                        <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3" Padding="6" Margin="0,4,0,2" Background="{DynamicResource Brush.Card}">
                                             <StackPanel>
                                                 <DockPanel>
                                                     <ToggleButton DockPanel.Dock="Right" Content="S" Width="22" Margin="2,0,0,0" IsChecked="{Binding Solo}" ToolTip="Solo" />
                                                     <ToggleButton DockPanel.Dock="Right" Content="M" Width="22" Margin="4,0,0,0" IsChecked="{Binding Muted}" ToolTip="Stumm" />
                                                     <StackPanel>
                                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                        <TextBlock FontSize="11" Foreground="#666">
+                                                        <TextBlock FontSize="11" Foreground="{DynamicResource Brush.SubText}">
                                                             <Run Text="{Binding KindText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding EffectsText, Mode=OneWay}" />
                                                         </TextBlock>
                                                     </StackPanel>
@@ -921,7 +926,7 @@
                                                 </Grid>
                                                 <Expander Header="Raum (5.1)" Margin="0,2,0,0">
                                                     <StackPanel Margin="0,4,0,0">
-                                                        <TextBlock FontSize="11" Foreground="#666" Text="{Binding PositionText}" />
+                                                        <TextBlock FontSize="11" Foreground="{DynamicResource Brush.SubText}" Text="{Binding PositionText}" />
                                                         <Grid>
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="80" />
@@ -1008,13 +1013,13 @@
                             <ItemsControl ItemsSource="{Binding ExportQueue.Jobs}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:ExportJobViewModel}">
-                                        <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="3" Padding="6" Margin="0,0,0,6" Background="White">
+                                        <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3" Padding="6" Margin="0,0,0,6" Background="{DynamicResource Brush.Card}">
                                             <StackPanel>
                                                 <DockPanel>
-                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}" Foreground="#555" />
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}" Foreground="{DynamicResource Brush.SubText}" />
                                                     <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                                 </DockPanel>
-                                                <TextBlock Text="{Binding PresetName}" FontSize="11" Foreground="#666" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding PresetName}" FontSize="11" Foreground="{DynamicResource Brush.SubText}" TextTrimming="CharacterEllipsis" />
                                                 <ProgressBar Height="8" Maximum="1" Value="{Binding Progress}" Margin="0,4,0,2" />
                                                 <TextBlock Text="{Binding Detail}" FontSize="11" TextWrapping="Wrap" />
                                                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
@@ -1114,19 +1119,19 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                                 </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Text="Länge" Foreground="#666" />
+                                <TextBlock Grid.Row="0" Text="Länge" Foreground="{DynamicResource Brush.SubText}" />
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DurationText}" />
-                                <TextBlock Grid.Row="1" Text="Kennlinie" Foreground="#666" />
+                                <TextBlock Grid.Row="1" Text="Kennlinie" Foreground="{DynamicResource Brush.SubText}" />
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TransferLabel}" />
-                                <TextBlock Grid.Row="2" Text="Größe" Foreground="#666" />
+                                <TextBlock Grid.Row="2" Text="Größe" Foreground="{DynamicResource Brush.SubText}" />
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SizeText}" />
-                                <TextBlock Grid.Row="3" Text="Aufgenommen" Foreground="#666" />
+                                <TextBlock Grid.Row="3" Text="Aufgenommen" Foreground="{DynamicResource Brush.SubText}" />
                                 <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding CreatedText}" />
-                                <TextBlock Grid.Row="4" Text="Datei(en)" Foreground="#666" />
+                                <TextBlock Grid.Row="4" Text="Datei(en)" Foreground="{DynamicResource Brush.SubText}" />
                                 <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PartsText}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="5" Text="Ordner" Foreground="#666" />
+                                <TextBlock Grid.Row="5" Text="Ordner" Foreground="{DynamicResource Brush.SubText}" />
                                 <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding FolderText}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="6" Text="Proxy" Foreground="#666" />
+                                <TextBlock Grid.Row="6" Text="Proxy" Foreground="{DynamicResource Brush.SubText}" />
                                 <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ProxyText}" />
                             </Grid>
 

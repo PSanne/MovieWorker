@@ -33,14 +33,22 @@ public partial class App : Application
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 
         var settings = new SettingsService();
+        if (settings.Settings.DarkTheme)
+        {
+            ThemeService.Apply(true);
+        }
+
         var tools = new MediaToolsService(settings);
         var viewModel = new MainViewModel(new WpfDialogService(), settings, tools, new ThumbnailService(tools));
         var window = new MainWindow(viewModel);
         MainWindow = window;
         window.Show();
 
+        // Nach einem Absturz: ungespeicherte Änderungen wiederherstellen?
+        var recovered = await viewModel.OfferRecoveryAsync();
+
         // Projekt aus der Kommandozeile öffnen (z. B. Doppelklick auf eine .mvproj-Datei).
-        if (e.Args.Length > 0 && File.Exists(e.Args[0]))
+        if (!recovered && e.Args.Length > 0 && File.Exists(e.Args[0]))
         {
             if (e.Args[0].EndsWith(".mvproj", StringComparison.OrdinalIgnoreCase))
             {

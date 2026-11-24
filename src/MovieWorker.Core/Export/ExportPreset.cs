@@ -39,8 +39,15 @@ public sealed record ExportPreset(
     bool AudioOnly = false,
     double? MaxFrameRate = null,
     bool HdrOutput = false,
-    bool SurroundAudio = false)
+    bool SurroundAudio = false,
+    HardwareEncoder? HardwareEncoder = null)
 {
+    /// <summary>Kodiert auf der Grafikkarte?</summary>
+    public bool UsesHardware => HardwareEncoder is not null;
+
+    /// <summary>Dieselbe Vorlage mit Software-Encoder (Rückfall, wenn die Grafikkarte scheitert).</summary>
+    public ExportPreset Software => HardwareEncoder is null ? this : Find(Id[..^4]) is { } original ? original with { Reframe = Reframe } : this;
+
     public override string ToString() => Name;
 
     public string CategoryLabel => Category switch

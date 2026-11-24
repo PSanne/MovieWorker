@@ -51,6 +51,9 @@ public sealed class AppSettings
     /// <summary>Hardware-Encoder (NVENC/Quick Sync) anbieten, wenn vorhanden.</summary>
     public bool UseHardwareEncoders { get; set; } = true;
 
+    /// <summary>Dunkles Design der Oberfläche.</summary>
+    public bool DarkTheme { get; set; }
+
     public void AddRecentProject(string path)
     {
         RecentProjects.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));

@@ -31,6 +31,9 @@ public sealed partial class ExportJobViewModel : ObservableObject
 
     public ExportPreset Preset { get; }
 
+    /// <summary>Die Grafikkarte hat nicht geklappt – mit dem Prozessor exportiert.</summary>
+    public bool UsedFallback { get; set; }
+
     public string OutputPath { get; }
 
     public long? RangeStart { get; }

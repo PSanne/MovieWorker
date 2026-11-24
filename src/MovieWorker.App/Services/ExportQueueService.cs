@@ -95,7 +95,8 @@ public sealed class ExportQueueService(MediaToolsService tools)
                 job.Measured = loudness;
             }
 
-            var ffmpegJob = ExportBuilder.Build(job.Snapshot, job.Preset, temp, job.RangeStart, job.RangeEnd, loudness);
+            var preset = job.Preset;
+            var ffmpegJob = ExportBuilder.Build(job.Snapshot, preset, temp, job.RangeStart, job.RangeEnd, loudness);
             var eta = new EtaEstimator();
             job.Clock.Restart();
             var progress = new Progress<double>(p =>
@@ -103,12 +104,27 @@ public sealed class ExportQueueService(MediaToolsService tools)
                 job.Progress = p;
                 job.Detail = $"{p:P0} · {EtaEstimator.Format(eta.Add(job.Clock.Elapsed.TotalSeconds, p))}";
             });
-            await client.RunAsync(ffmpegJob.Arguments, ffmpegJob.DurationSeconds, progress, job.Cancellation.Token);
+            try
+            {
+                await client.RunAsync(ffmpegJob.Arguments, ffmpegJob.DurationSeconds, progress, job.Cancellation.Token);
+            }
+            catch (FfmpegException) when (preset.UsesHardware && !job.Cancellation.IsCancellationRequested)
+            {
+                // Grafikkarte nicht nutzbar (Treiber, Auflösung, Format): einfach mit dem Prozessor noch einmal.
+                job.UsedFallback = true;
+                job.Detail = "Grafikkarte nicht nutzbar – Export mit dem Prozessor …";
+                preset = preset.Software;
+                ffmpegJob = ExportBuilder.Build(job.Snapshot, preset, temp, job.RangeStart, job.RangeEnd, loudness);
+                eta = new EtaEstimator();
+                job.Clock.Restart();
+                await client.RunAsync(ffmpegJob.Arguments, ffmpegJob.DurationSeconds, progress, job.Cancellation.Token);
+            }
             File.Move(temp, job.OutputPath, overwrite: true);
             job.Progress = 1;
             job.State = ExportJobState.Done;
             job.Detail = $"Fertig in {Core.Time.Timecode.FormatDuration(job.Clock.Elapsed)} · {MediaItemViewModel.FormatSize(new FileInfo(job.OutputPath).Length)}"
-                + (loudness is null ? string.Empty : $" · Ton auf {job.Snapshot.Master.LoudnessTarget:0} LUFS gebracht (vorher {loudness.IntegratedLufs:0.0})");
+                + (loudness is null ? string.Empty : $" · Ton auf {job.Snapshot.Master.LoudnessTarget:0} LUFS gebracht (vorher {loudness.IntegratedLufs:0.0})")
+                + (job.UsedFallback ? " · Grafikkarte nicht nutzbar, mit dem Prozessor exportiert" : preset.HardwareEncoder is { } hw ? $" · mit {hw.VendorName}" : string.Empty);
         }
         catch (OperationCanceledException)
         {

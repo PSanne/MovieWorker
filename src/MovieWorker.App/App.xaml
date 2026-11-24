@@ -4,6 +4,10 @@
              xmlns:h="clr-namespace:MovieWorker.App.Helpers"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
+        <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary Source="Themes/Light.xaml" />
+        </ResourceDictionary.MergedDictionaries>
         <h:NullToVisibilityConverter x:Key="NullToVisibility" />
         <h:BoolToVisibilityConverter x:Key="BoolToVisibility" />
         <h:InverseBoolConverter x:Key="InverseBool" />
@@ -15,7 +19,7 @@
             <Setter Property="Margin" Value="0,8,0,4" />
         </Style>
         <Style x:Key="Hint" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#666" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.SubText}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
         <Style x:Key="Badge" TargetType="Border">
@@ -23,5 +27,6 @@
             <Setter Property="Padding" Value="5,1" />
             <Setter Property="Margin" Value="0,0,4,0" />
         </Style>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

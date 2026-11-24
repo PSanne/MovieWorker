@@ -1,0 +1,13 @@
+<!-- Helles Design: native Windows-Steuerelemente, nur die eigenen Flächen und Textfarben. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="Brush.Window" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Brush.Panel" Color="#F5F5F7" />
+    <SolidColorBrush x:Key="Brush.Card" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Brush.Border" Color="#DDDDDD" />
+    <SolidColorBrush x:Key="Brush.Text" Color="#1A1A1A" />
+    <SolidColorBrush x:Key="Brush.SubText" Color="#666666" />
+    <SolidColorBrush x:Key="Brush.Accent" Color="#6631D7" />
+    <SolidColorBrush x:Key="Brush.NodeFill" Color="#F4F2FD" />
+    <SolidColorBrush x:Key="Brush.NodeFixed" Color="#ECECEC" />
+</ResourceDictionary>

@@ -49,19 +49,30 @@ jobs:
             -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:Version=$version --output publish
           Copy-Item tools/ffmpeg publish/ffmpeg -Recurse
+          Copy-Item docs/ANLEITUNG.md publish/Anleitung.md
           Compress-Archive -Path publish/* -DestinationPath "MovieWorker-$($env:TAG)-win-x64.zip"
+
+      - name: Installer bauen
+        shell: pwsh
+        run: ./build/build-installer.ps1 -Version $env:TAG.TrimStart("v")
 
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
           target_commitish: ${{ github.sha }}
           name: MovieWorker ${{ env.TAG }}
-          files: MovieWorker-${{ env.TAG }}-win-x64.zip
+          files: |
+            MovieWorker-${{ env.TAG }}-win-x64.zip
+            installer-out/MovieWorker-Setup-${{ env.TAG }}.exe
           body: |
             ## Installation
-            1. Unten bei **Assets** die Datei `MovieWorker-${{ env.TAG }}-win-x64.zip` herunterladen.
-            2. ZIP-Datei entpacken (Rechtsklick → „Alle extrahieren …“).
-            3. `MovieWorker.exe` starten – es muss weder .NET noch FFmpeg installiert sein (FFmpeg liegt im Ordner `ffmpeg`).
+            **Empfohlen:** `MovieWorker-Setup-${{ env.TAG }}.exe` herunterladen und starten – der Installer legt
+            MovieWorker im Startmenü an (auf Wunsch auch auf dem Desktop) und öffnet `.mvproj`-Projekte per Doppelklick.
+            Administratorrechte sind nicht nötig.
+
+            **Ohne Installation:** `MovieWorker-${{ env.TAG }}-win-x64.zip` herunterladen, entpacken und `MovieWorker.exe` starten.
+
+            Es muss weder .NET noch FFmpeg installiert sein (FFmpeg liegt bei). Die Anleitung steckt im Programm unter *Hilfe → Anleitung*.
 
             Falls Windows SmartScreen warnt: **„Weitere Informationen“ → „Trotzdem ausführen“**
             (die Datei ist nicht digital signiert).

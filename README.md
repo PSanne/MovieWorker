@@ -7,11 +7,12 @@ Es ist auf Material der **Canon EOS R6 Mark II** und der **Canon EOS 70D** zuges
 professionelle Videos machen: vom Import der Speicherkarte über den Schnitt bis zum Export als
 H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 
-> **Stand: Sprint 15 von 16 abgeschlossen** – Import, Medien-Arbeitsbereich, Schnellschnitt, Profi-Schnitt, Übergänge & Titel,
-> Mehrspur & Multicam, Farbkorrektur mit Knoten und Masken, Mischpult mit Lautheit und Ducking, Sprachaufnahme, ADR und 5.1-Raumklang,
-> Effekte mit Greenscreen und Tracking, Export. Als Nächstes: Feinschliff und Version 1.0. Die erste voll nutzbare Version: importieren, schneiden,
-> abspielen und für YouTube, Instagram/TikTok oder als Master exportieren. Den kompletten Plan findest du in
-> **[docs/SPRINTS.md](docs/SPRINTS.md)**.
+> **Version 1.0 – alle 16 Sprints abgeschlossen** 🎉 Import von der Speicherkarte, Medien-Arbeitsbereich, Schnellschnitt,
+> Profi-Schnitt, Übergänge & Titel, Mehrspur & Multicam, Farbkorrektur mit Knoten, Masken und Tracking, Mischpult mit Lautheit,
+> Ducking und 5.1-Raumklang, Sprachaufnahme & ADR, Effekte mit Greenscreen, Export auch über die Grafikkarte, automatisches
+> Sichern, dunkles Design, eingebaute Anleitung und Windows-Installer. Den Plan und was in welchem Sprint entstand, findest du in
+> **[docs/SPRINTS.md](docs/SPRINTS.md)**, die Bedienung Schritt für Schritt in der **[Anleitung](docs/ANLEITUNG.md)**
+> (auch im Programm unter *Hilfe → Anleitung*, F1).
 
 ## Was MovieWorker über deine Kameras weiß
 
@@ -47,6 +48,9 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | **Sprachaufnahme & ADR** | Reiter *Ton → Sprachaufnahme & ADR* (Strg+Umschalt+R): Mikrofon wählen (⟳ sucht angeschlossene Mikrofone; *Testton* zum Ausprobieren ohne Mikrofon), Zielspur, Vorlauf · **Voice-over**: das Bild läuft ab dem Abspielkopf, gesprochen wird dazu, *Stopp* setzt die Aufnahme genau an die Stelle · **ADR** (Nachsynchronisation): In/Out um den Dialog → *Aus In/Out* legt eine ADR-Szene an (orange in der Timeline), Dialogtext zum Ablesen, mit **Schleife** entstehen Takes nacheinander, der letzte vollständige wird eingesetzt, ältere per *Verwenden*; der Originalton im Bereich wird stummgeschaltet · Aufnahmen landen im Ordner „‹Projekt› Aufnahmen“ und im Medienpool |
 | **Raumklang 5.1** | Je Spur im Mischpult unter *Raum (5.1)*: vorne ↔ hinten, **Center** (Dialog), **Subwoofer** (nur unter 120 Hz) und Vorlagen *Dialog*, *Musik*, *Atmo*, *Effekt* · Export-Vorlagen **Master 5.1** (H.264 + AAC 5.1) und **WAV 5.1** · Stereo-Exporte werden nach ITU-Norm heruntergemischt – ohne Raumeinstellungen bleibt alles wie gewohnt |
 | **Effekte & Compositing** | Reiter *Effekte* bzw. Menü *Effekte*: **Greenscreen/Bluescreen** freistellen (Chroma-Key) – Toleranz, weiche Kante, **Spill-Unterdrückung** gegen grüne Ränder, **Pipette** (Strg+Klick ins Bild), Hintergrund einfach auf die Spur darunter legen · **Luma-Key** (Helles/Dunkles freistellen) · **Weichzeichnen**, **Verpixeln**, Schärfen, Schwarzweiß, Sepia, Filmkorn, **Verwacklung reduzieren** · jeder Effekt optional nur in einer **Maske** (Ellipse/Rechteck, weich, umkehrbar; Umschalt+Klick setzt sie), die per **Tracking** einem Objekt folgt – z. B. Gesichter oder Kennzeichen verpixeln; bei Keys als „Garbage Matte“ · **Knoten-Editor**: die Effektkette als Knoten (Quelle → Farbe → Effekte → Ausgabe), Reihenfolge per Ziehen, Doppelklick schaltet an/aus · Effekte kopieren und einfügen |
+| **Export über die Grafikkarte** | NVIDIA NVENC, Intel Quick Sync und AMD AMF werden beim Start erkannt (mit Probe-Kodierung, nicht nur nach Liste) · im Export-Dialog *Grafikkarte nutzen* – meist 3- bis 6-mal schneller, gleiche Vorlagen (H.264 bleibt H.264, H.265 10 Bit bleibt 10 Bit) · klappt es nicht, exportiert MovieWorker automatisch mit dem Prozessor |
+| **Sicherheit** | **Automatisches Sichern** alle 3 Minuten · nach einem Absturz bietet der nächste Start die **Wiederherstellung** an · beim Speichern bleibt die vorige Fassung als `.mvproj.bak` erhalten |
+| **Gestaltung & Hilfe** | *Extras → Dunkles Design* · eigenes Programmsymbol · **Anleitung** im Programm (F1, mit Suche) · Windows-**Installer** mit Startmenü-Eintrag und Dateizuordnung für `.mvproj` |
 | **Exakte Vorschau** | Im Stillstand rechnet der Programmmonitor das Bild über **dieselbe Kette wie der Export** – alle Spuren, Bild-in-Bild, Mischmodi, Titel, Farbe, Keyframes |
 | **Clip-Inspektor** | Position und Länge als Timecode · Geschwindigkeit (Zeitlupe/Zeitraffer) · „Als Zeitlupe abspielen“ für 150/180-fps-Clips · Lautstärke (auch per Keyframe), Ton stumm, Ein-/Ausblenden |
 | **Monitore** | *Quelle*: Aufnahme ansehen, In/Out setzen, Ausschnitt ans Ende oder am Abspielkopf einfügen · *Programm*: Timeline abspielen; im Stillstand exaktes Standbild mit LUT/HDR-Umrechnung wie im Export · J/K/L-Shuttle |
@@ -77,6 +81,8 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | Kreuzblende am Schnitt / neuer Titel | Strg+D / Strg+Umschalt+T |
 | Multicam: Kamera wechseln | 1 … 9 (auch beim Abspielen) |
 | Sprachaufnahme / ADR starten und stoppen | Strg+Umschalt+R |
+| Pipette (Key-Farbe) / Maske setzen | Strg+Klick / Umschalt+Klick ins Bild |
+| Anleitung | F1 |
 
 ## Funktionen des Kerns (Sprint 1)
 
@@ -92,8 +98,13 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 ## Loslegen
 
 ### Fertige Version herunterladen
-Fertige Versionen gibt es unter **[Releases](https://github.com/PSanne/MovieWorker/releases/latest)**: ZIP herunterladen,
-entpacken, `MovieWorker.exe` starten. Es muss weder .NET noch FFmpeg installiert sein (FFmpeg liegt im Ordner `ffmpeg`).
+Fertige Versionen gibt es unter **[Releases](https://github.com/PSanne/MovieWorker/releases/latest)**:
+
+- **Installer** (empfohlen): `MovieWorker-Setup-v1.0.0.exe` herunterladen und starten. Legt MovieWorker im Startmenü an,
+  auf Wunsch auch auf dem Desktop, und öffnet `.mvproj`-Projekte per Doppelklick. Administratorrechte sind nicht nötig.
+- **Ohne Installation**: ZIP herunterladen, entpacken, `MovieWorker.exe` starten.
+
+Es muss weder .NET noch FFmpeg installiert sein (FFmpeg liegt bei).
 
 Zwischenstände aus jedem Push gibt es unter **Actions → „Build & Test“ → Lauf auswählen → Artifacts**
 (nur angemeldet sichtbar). Jeder Lauf startet die App unter Windows im **Selbsttest**: Testclips im Stil beider

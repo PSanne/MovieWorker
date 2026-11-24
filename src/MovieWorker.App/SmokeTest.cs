@@ -116,6 +116,8 @@ public static class SmokeTest
 
         settings.Settings.ProxyFolder = Path.Combine(c.Temp, "Proxys");
         settings.Settings.AutoCreateProxies = false; // Proxys erzeugt der Test gezielt weiter unten
+        var autosaveFolder = Path.Combine(c.Temp, "Autosave");
+        MainViewModel.AutosaveFolderOverride = autosaveFolder;
         var vm = new MainViewModel(dialogs, settings, tools, new ThumbnailService(tools));
         var window = new MainWindow(vm);
         Application.Current.MainWindow = window;
@@ -738,9 +740,54 @@ public static class SmokeTest
         clipCount = vm.Project.AllClips.Count();
         imported = [.. imported, .. vm.MediaItems.Skip(imported.Count)];
 
+        // ---- Feinschliff (Sprint 16): GPU-Export mit Rückfall, Autosave & Wiederherstellung
+        var hardware = await tools.DetectHardwareAsync();
+        c.Log("Grafikkarten-Erkennung: " + (hardware.Count == 0 ? "keine – Export mit dem Prozessor" : string.Join(", ", hardware)));
+        var forcedGpu = MovieWorker.Core.Export.HardwareEncoders.Apply(MovieWorker.Core.Export.ExportPreset.Find("web-h264-1080")!,
+            [new MovieWorker.Core.Export.HardwareEncoder(MovieWorker.Core.Export.HardwareVendor.Nvidia, false)]);
+        vm.Editor.SetMarks(0, 25);
+        var gpuJob = vm.EnqueueExport(forcedGpu, Path.Combine(exportFolder, "grafikkarte.mp4"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(gpuJob.State == ExportJobState.Done && File.Exists(gpuJob.OutputPath),
+            $"GPU-Export {(gpuJob.UsedFallback ? "mit Rückfall auf den Prozessor" : "auf der Grafikkarte")}: {gpuJob.Detail}");
+        var gpuDialog = new ExportDialogViewModel(vm.Project, vm.ProjectName, dialogs, settings, hardware);
+        c.Check(gpuDialog.GpuPossible == (hardware.Count > 0) || hardware.All(h => h.Hevc), "Export-Dialog: " + gpuDialog.GpuText);
+
+        c.Check(vm.IsDirty && await vm.AutosaveNowAsync() && vm.Autosave.HasOwn, "Automatisch gesichert");
+        var recoverable = new MovieWorker.Core.Projects.AutosaveStore(autosaveFolder).FindRecoverable(_ => false);
+        c.Check(recoverable.Count == 1 && recoverable[0].Title == vm.ProjectName, "Sicherung wird beim nächsten Start gefunden");
+        var vmAfterCrash = new MainViewModel(dialogs, settings, tools, new ThumbnailService(tools));
+        dialogs.Answers.Enqueue(true);
+        c.Check(await vmAfterCrash.OfferRecoveryAsync() && vmAfterCrash.IsDirty
+                && vmAfterCrash.Project.AllClips.Count() == vm.Project.AllClips.Count()
+                && vmAfterCrash.Project.AdrCues.Count == vm.Project.AdrCues.Count, "Nach „Absturz“ wiederhergestellt: " + vmAfterCrash.StatusText);
+        vmAfterCrash.EndSession();
+        c.Check(!vm.Autosave.HasOwn, "Wiederhergestellte Sicherung aufgeräumt");
+
+        // ---- Gestaltung (Sprint 16): dunkles Design
+        window.ExportTab.IsSelected = true;
+        await Settle();
+        var lightWindow = Brightness(window);
+        vm.DarkTheme = true;
+        await Settle(600);
+        var darkWindow = Brightness(window);
+        var visibleButton = Find<System.Windows.Controls.Button>(window).First(b => b.IsVisible && b.ActualWidth > 30);
+        var visibleCombo = Find<System.Windows.Controls.ComboBox>(window).FirstOrDefault(b => b.IsVisible && b.ActualWidth > 30);
+        var menu = Find<System.Windows.Controls.Menu>(window).First();
+        c.Check(darkWindow < lightWindow && darkWindow < 0.3 && Brightness(visibleButton) < 0.45 && Brightness(menu) < 0.4
+                && (visibleCombo is null || Brightness(visibleCombo) < 0.45),
+            $"Dunkles Design: Fenster {darkWindow:P0} (hell {lightWindow:P0}), Schaltfläche {Brightness(visibleButton):P0}, Menü {Brightness(menu):P0}");
+        window.EffectsTab.IsSelected = true;
+        await Settle();
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "dunkel.png"));
+        vm.DarkTheme = false;
+        await Settle(300);
+        c.Check(Brightness(window) > darkWindow && !settings.Settings.DarkTheme, "Zurück zum hellen Design");
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");
+        c.Check(await vm.SaveToAsync(projectFile) && File.Exists(projectFile + ".bak"), "Beim erneuten Speichern bleibt eine Sicherungskopie (.bak)");
         await vm.NewProjectAsync();
         c.Check(!vm.Project.AllClips.Any() && vm.MediaItems.Count == 0, "Neues leeres Projekt");
         await vm.OpenProjectFileAsync(projectFile);
@@ -763,6 +810,11 @@ public static class SmokeTest
         // ---- Dialoge laden (XAML-Prüfung)
         await ShowAndClose(new ImportCardWindow(new ImportCardViewModel(dialogs, settings)), c);
         await ShowAndClose(new ProjectSettingsWindow(new ProjectSettingsViewModel(vm.Project.Settings)), c);
+        var help = window.ShowHelp();
+        await Settle();
+        c.Check(help.IsVisible && help.Document.Blocks.Count > 30 && help.Document.Blocks.OfType<System.Windows.Documents.Table>().Count() >= 3,
+            $"Anleitung geöffnet ({help.Document.Blocks.Count} Abschnitte)");
+        help.Close();
 
         // ---- Vorschaubilder
         await Settle(3000);
@@ -788,6 +840,43 @@ public static class SmokeTest
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         await Task.Delay(milliseconds);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+    }
+
+    /// <summary>Mittlere Helligkeit (0 … 1) eines Steuerelements, wie es gerade gezeichnet ist.</summary>
+    private static double Brightness(FrameworkElement element)
+    {
+        var width = (int)Math.Max(1, element.ActualWidth);
+        var height = (int)Math.Max(1, element.ActualHeight);
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(element);
+        var pixels = new byte[width * height * 4];
+        bitmap.CopyPixels(pixels, width * 4, 0);
+        double sum = 0;
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            var alpha = pixels[i + 3] / 255.0;
+            sum += alpha * (0.0722 * pixels[i] + 0.7152 * pixels[i + 1] + 0.2126 * pixels[i + 2]) / 255;
+        }
+
+        return sum / (width * height);
+    }
+
+    private static IEnumerable<T> Find<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var nested in Find<T>(child))
+            {
+                yield return nested;
+            }
+        }
     }
 
     private static void SaveScreenshot(FrameworkElement element, string path)

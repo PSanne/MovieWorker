@@ -29,10 +29,16 @@ public static class ProjectSerializer
         return project;
     }
 
-    public static async Task SaveAsync(MovieProject project, string path, CancellationToken token = default)
+    /// <summary>Speichert sicher: erst in eine Zwischendatei, die vorige Fassung bleibt als „.bak“ erhalten.</summary>
+    public static async Task SaveAsync(MovieProject project, string path, CancellationToken token = default, bool keepBackup = false)
     {
         var temp = path + ".tmp";
         await File.WriteAllTextAsync(temp, Serialize(project), token).ConfigureAwait(false);
+        if (keepBackup && File.Exists(path))
+        {
+            File.Copy(path, path + ".bak", overwrite: true);
+        }
+
         File.Move(temp, path, overwrite: true);
     }
 

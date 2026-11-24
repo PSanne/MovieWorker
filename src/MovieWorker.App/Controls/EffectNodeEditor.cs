@@ -19,7 +19,7 @@ public sealed class EffectNodeEditor : FrameworkElement
 
     private static readonly Brush NodeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xF4, 0xF2, 0xFD)));
     private static readonly Brush FixedBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xEC, 0xEC, 0xEC)));
-    private static readonly Brush ColorNodeBrush = Freeze(new LinearGradientBrush(Color.FromRgb(0xFF, 0xE0, 0xC0), Color.FromRgb(0xC8, 0xE0, 0xFF), 0));
+    private static readonly Brush ColorNodeBrush = Freeze(new LinearGradientBrush(Color.FromArgb(0x70, 0xFF, 0xA0, 0x50), Color.FromArgb(0x70, 0x60, 0xA0, 0xFF), 0));
     private static readonly Brush KeyStripe = Freeze(new SolidColorBrush(Color.FromRgb(0x00, 0xB1, 0x40)));
     private static readonly Brush FxStripe = Freeze(new SolidColorBrush(Color.FromRgb(0x66, 0x31, 0xD7)));
     private static readonly Brush TextBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A)));
@@ -107,9 +107,16 @@ public sealed class EffectNodeEditor : FrameworkElement
     private Rect NodeRect(int index) =>
         new(Pad + 14, Pad + index * (NodeHeight + Gap), Math.Max(60, ActualWidth - 2 * Pad - 28), NodeHeight);
 
+    private Brush Themed(string key, Brush fallback) => TryFindResource(key) as Brush ?? fallback;
+
     protected override void OnRender(DrawingContext dc)
     {
-        dc.DrawRectangle(Brushes.White, null, new Rect(RenderSize));
+        var background = Themed("Brush.Card", Brushes.White);
+        var nodeFill = Themed("Brush.NodeFill", NodeBrush);
+        var fixedFill = Themed("Brush.NodeFixed", FixedBrush);
+        var textColor = Themed("Brush.Text", TextBrush);
+        var dimColor = Themed("Brush.SubText", DimBrush);
+        dc.DrawRectangle(background, null, new Rect(RenderSize));
         var nodes = Nodes();
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         for (var i = 0; i < nodes.Count; i++)
@@ -134,6 +141,7 @@ public sealed class EffectNodeEditor : FrameworkElement
             }
 
             var (title, detail, effect, fill) = nodes[i];
+            fill = ReferenceEquals(fill, NodeBrush) ? nodeFill : ReferenceEquals(fill, FixedBrush) ? fixedFill : fill;
             var selected = effect is not null && effect.Id == _vm?.SelectedEffectId;
             var pen = selected ? SelectedPen : effect is { Enabled: false } ? DisabledPen : BorderPen;
             dc.DrawRoundedRectangle(fill, pen, rect, 6, 6);
@@ -142,7 +150,7 @@ public sealed class EffectNodeEditor : FrameworkElement
                 dc.DrawRoundedRectangle(effect.IsKey ? KeyStripe : FxStripe, null, new Rect(rect.Left, rect.Top, 5, rect.Height), 2, 2);
             }
 
-            var textBrush = effect is { Enabled: false } ? DimBrush : TextBrush;
+            var textBrush = effect is { Enabled: false } ? dimColor : textColor;
             var number = effect is null ? string.Empty : $"{i - FirstEffectIndex + 1}. ";
             var head = new FormattedText(number + title + (effect is { Enabled: false } ? "  (aus)" : string.Empty), CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight, new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal), 12.5, textBrush, dpi)
@@ -150,7 +158,7 @@ public sealed class EffectNodeEditor : FrameworkElement
                 MaxTextWidth = Math.Max(10, rect.Width - 18), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis,
             };
             dc.DrawText(head, new Point(rect.Left + 10, rect.Top + 4));
-            var sub = new FormattedText(detail, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 10.5, DimBrush, dpi)
+            var sub = new FormattedText(detail, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 10.5, dimColor, dpi)
             {
                 MaxTextWidth = Math.Max(10, rect.Width - 18), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis,
             };

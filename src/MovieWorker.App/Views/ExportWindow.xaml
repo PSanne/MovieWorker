@@ -1,4 +1,5 @@
 <Window x:Class="MovieWorker.App.Views.ExportWindow"
+        Background="{DynamicResource Brush.Window}" Foreground="{DynamicResource Brush.Text}"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Exportieren" Width="900" Height="620" MinWidth="720" MinHeight="480"
@@ -29,7 +30,7 @@
                         <GroupStyle>
                             <GroupStyle.HeaderTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" Foreground="#555" Margin="2,8,0,2" />
+                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" Foreground="{DynamicResource Brush.SubText}" Margin="2,8,0,2" />
                                 </DataTemplate>
                             </GroupStyle.HeaderTemplate>
                         </GroupStyle>
@@ -44,9 +45,13 @@
             <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <TextBlock Text="{Binding SelectedPreset.Name}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding SelectedPreset.Description}" TextWrapping="Wrap" Foreground="#555" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding SelectedPreset.Description}" TextWrapping="Wrap" Foreground="{DynamicResource Brush.SubText}" Margin="0,4,0,0" />
                     <TextBlock Text="{Binding OutputText}" Margin="0,6,0,0" FontFamily="Consolas" />
 
+                    <StackPanel Margin="0,10,0,0">
+                        <CheckBox Content="Grafikkarte nutzen (schneller)" IsChecked="{Binding UseGpu}" IsEnabled="{Binding GpuPossible}" x:Name="GpuCheck" />
+                        <TextBlock Text="{Binding GpuText}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.SubText}" Margin="18,2,0,0" />
+                    </StackPanel>
                     <StackPanel Visibility="{Binding CanReframe, Converter={StaticResource BoolToVisibility}}" Margin="0,10,0,0">
                         <TextBlock Text="Anderes Seitenverhältnis" FontWeight="SemiBold" />
                         <ComboBox ItemsSource="{Binding ReframeChoices}" SelectedItem="{Binding SelectedReframe}" Margin="0,4,0,0" />
@@ -86,7 +91,7 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <TextBlock Margin="0,12,0,0" Foreground="#666" TextWrapping="Wrap"
+                    <TextBlock Margin="0,12,0,0" Foreground="{DynamicResource Brush.SubText}" TextWrapping="Wrap"
                                Text="Exportiert wird immer aus den Originaldateien (nie aus Proxys). Der Auftrag läuft im Hintergrund – du kannst weiterschneiden; die Warteschlange steht rechts im Reiter „Export“." />
                 </StackPanel>
             </ScrollViewer>

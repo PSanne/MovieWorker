@@ -8,7 +8,14 @@
     <AssemblyName>MovieWorker</AssemblyName>
     <!-- Erlaubt das Bauen auch außerhalb von Windows (z. B. in CI); ausführen lässt sich die App nur unter Windows. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationIcon>Assets\MovieWorker.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\MovieWorker.ico" />
+    <Resource Include="Assets\MovieWorker.png" />
+    <EmbeddedResource Include="..\..\docs\ANLEITUNG.md" LogicalName="MovieWorker.Anleitung.md" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />

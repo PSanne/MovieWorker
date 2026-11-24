@@ -1,3 +1,4 @@
+using MovieWorker.Core.Export;
 using MovieWorker.Core.Media;
 
 namespace MovieWorker.App.Services;
@@ -25,7 +26,20 @@ public sealed class MediaToolsService
     {
         var paths = FfmpegLocator.LocateDefault(_settings.Settings.FfmpegPath);
         Client = paths is null ? null : new FfmpegClient(paths);
+        _hardware = null;
     }
+
+    private Task<IReadOnlyList<HardwareEncoder>>? _hardware;
+
+    /// <summary>Grafikkarten-Encoder erkennen (einmal pro Programmstart, im Hintergrund).</summary>
+    public Task<IReadOnlyList<HardwareEncoder>> DetectHardwareAsync() =>
+        _hardware ??= Client is { } client
+            ? Task.Run(() => MovieWorker.Core.Export.HardwareEncoders.DetectAsync(client))
+            : Task.FromResult<IReadOnlyList<HardwareEncoder>>([]);
+
+    /// <summary>Bereits erkannte Grafikkarten-Encoder (leer, solange die Erkennung läuft).</summary>
+    public IReadOnlyList<HardwareEncoder> HardwareEncoders =>
+        _hardware is { IsCompletedSuccessfully: true } task ? task.Result : [];
 
     public FfmpegClient Require() =>
         Client ?? throw new InvalidOperationException(

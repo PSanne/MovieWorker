@@ -22,8 +22,13 @@ public sealed partial class ExportDialogViewModel : ObservableObject
     private readonly SettingsService _settings;
     private readonly string _projectName;
 
-    public ExportDialogViewModel(MovieProject project, string projectName, IDialogService dialogs, SettingsService settings)
+    private readonly IReadOnlyList<HardwareEncoder> _hardware;
+
+    public ExportDialogViewModel(MovieProject project, string projectName, IDialogService dialogs, SettingsService settings,
+        IReadOnlyList<HardwareEncoder>? hardware = null)
     {
+        _hardware = hardware ?? [];
+        _useGpu = settings.Settings.UseHardwareEncoders;
         _project = project;
         _projectName = projectName;
         _dialogs = dialogs;
@@ -103,7 +108,34 @@ public sealed partial class ExportDialogViewModel : ObservableObject
 
     public string FullPath => Path.Combine(Folder, FileName);
 
-    private ExportPreset EffectivePreset => SelectedPreset.HasFixedSize ? SelectedPreset.WithReframe(SelectedReframe.Mode) : SelectedPreset;
+    private ExportPreset EffectivePreset
+    {
+        get
+        {
+            var preset = SelectedPreset.HasFixedSize ? SelectedPreset.WithReframe(SelectedReframe.Mode) : SelectedPreset;
+            return UseGpu && GpuPossible ? HardwareEncoders.Apply(preset, _hardware) : preset;
+        }
+    }
+
+    /// <summary>Grafikkarte zum Kodieren nutzen (NVIDIA NVENC, Intel Quick Sync, AMD AMF).</summary>
+    [ObservableProperty]
+    private bool _useGpu;
+
+    public bool GpuPossible => _hardware.Count > 0 && HardwareEncoders.Supports(SelectedPreset)
+        && _hardware.Any(h => h.Hevc == SelectedPreset.VideoArguments.Contains("libx265"));
+
+    public string GpuText => _hardware.Count == 0
+        ? "Keine Grafikkarten-Kodierung gefunden – der Export läuft auf dem Prozessor."
+        : !GpuPossible
+            ? "Diese Vorlage wird immer auf dem Prozessor erstellt (ProRes, DNxHR, HDR10, nur Ton)."
+            : $"Gefunden: {string.Join(", ", _hardware.Select(h => h.VendorName).Distinct())} – meist 3- bis 6-mal schneller. Klappt es nicht, exportiert MovieWorker automatisch mit dem Prozessor.";
+
+    partial void OnUseGpuChanged(bool value)
+    {
+        _settings.Settings.UseHardwareEncoders = value;
+        _settings.Save();
+        Refresh();
+    }
 
     partial void OnSelectedPresetChanged(ExportPreset value)
     {
@@ -169,5 +201,7 @@ public sealed partial class ExportDialogViewModel : ObservableObject
         OnPropertyChanged(nameof(HasNoIssues));
         OnPropertyChanged(nameof(CanReframe));
         OnPropertyChanged(nameof(RangeText));
+        OnPropertyChanged(nameof(GpuPossible));
+        OnPropertyChanged(nameof(GpuText));
     }
 }

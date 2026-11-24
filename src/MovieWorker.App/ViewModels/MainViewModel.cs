@@ -49,7 +49,22 @@ public sealed partial class MainViewModel : ObservableObject
         ApplySort();
         RefreshRecentProjects();
         Recording = new RecordingViewModel(this);
+        Autosave = new AutosaveStore(AutosaveFolderOverride ?? AutosaveStore.DefaultFolder);
+        _autosaveTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMinutes(Math.Max(1, settings.Settings.AutosaveMinutes)),
+        };
+        _autosaveTimer.Tick += async (_, _) => await AutosaveNowAsync();
+        if (settings.Settings.AutosaveMinutes > 0)
+        {
+            _autosaveTimer.Start();
+        }
+
         StatusText = tools.IsAvailable ? "Bereit." : tools.StatusText;
+        if (tools.IsAvailable && settings.Settings.UseHardwareEncoders)
+        {
+            _ = tools.DetectHardwareAsync();
+        }
     }
 
     public TimelineEditor Editor { get; }
@@ -63,6 +78,95 @@ public sealed partial class MainViewModel : ObservableObject
     public ThumbnailService Thumbnails => _thumbnails;
 
     public WaveformService Waveforms { get; }
+
+    private readonly System.Windows.Threading.DispatcherTimer _autosaveTimer;
+
+    /// <summary>Dunkles Design (Extras → Dunkles Design), wird sofort umgeschaltet und gemerkt.</summary>
+    public bool DarkTheme
+    {
+        get => _settings.Settings.DarkTheme;
+        set
+        {
+            if (_settings.Settings.DarkTheme == value)
+            {
+                return;
+            }
+
+            _settings.Settings.DarkTheme = value;
+            _settings.Save();
+            ThemeService.Apply(value);
+            OnPropertyChanged();
+            ThemeChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    public event EventHandler? ThemeChanged;
+
+    /// <summary>Für Tests: eigener Ordner für automatische Sicherungen.</summary>
+    public static string? AutosaveFolderOverride { get; set; }
+
+    /// <summary>Automatische Sicherung ungespeicherter Änderungen (Wiederherstellung nach Absturz).</summary>
+    public AutosaveStore Autosave { get; }
+
+    /// <summary>Ungespeicherte Änderungen jetzt sichern (läuft sonst alle paar Minuten von selbst).</summary>
+    public async Task<bool> AutosaveNowAsync()
+    {
+        if (!IsDirty || !Project.AllClips.Any() && Project.Media.Count == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            await Autosave.SaveAsync(Project.Clone(), ProjectPath, ProjectName);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusText = "Automatisches Sichern nicht möglich: " + ex.Message;
+            return false;
+        }
+    }
+
+    /// <summary>Beim Start: Sicherungen nach einem Absturz anbieten.</summary>
+    public async Task<bool> OfferRecoveryAsync()
+    {
+        foreach (var entry in Autosave.FindRecoverable())
+        {
+            var when = entry.SavedAt.ToString("g", System.Globalization.CultureInfo.CurrentCulture);
+            if (!_dialogs.Confirm(
+                    $"MovieWorker wurde zuletzt nicht normal beendet.\n\nEs gibt ungespeicherte Änderungen an „{entry.Title}“ (gesichert {when}).\n\nJetzt wiederherstellen?",
+                    "Wiederherstellung"))
+            {
+                Autosave.Discard(entry);
+                continue;
+            }
+
+            try
+            {
+                var project = await Autosave.LoadAsync(entry);
+                LoadProject(project, entry.OriginalPath);
+                IsDirty = true;
+                Autosave.Discard(entry);
+                StatusText = $"Wiederhergestellt: {entry.Title} – bitte speichern.";
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
+            {
+                _dialogs.Error("Die Sicherung konnte nicht geladen werden: " + ex.Message);
+                Autosave.Discard(entry);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Beim normalen Beenden: eigene Sicherung entfernen.</summary>
+    public void EndSession()
+    {
+        _autosaveTimer.Stop();
+        Autosave.ClearOwn();
+    }
 
     /// <summary>Mischpult (Reiter „Ton“).</summary>
     public MixerViewModel Mixer { get; }
@@ -1114,9 +1218,10 @@ public sealed partial class MainViewModel : ObservableObject
     {
         try
         {
-            await ProjectSerializer.SaveAsync(Project, path);
+            await ProjectSerializer.SaveAsync(Project, path, keepBackup: true);
             ProjectPath = path;
             IsDirty = false;
+            Autosave.ClearOwn();
             RememberProject(path);
             StatusText = $"Gespeichert: {Path.GetFileName(path)}";
             return true;
@@ -1764,7 +1869,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        var vm = new ExportDialogViewModel(Project, ProjectName, _dialogs, _settings);
+        var vm = new ExportDialogViewModel(Project, ProjectName, _dialogs, _settings, _tools.HardwareEncoders);
         if (_dialogs.ShowDialog(vm) && vm.Result is { } job)
         {
             ExportQueue.Enqueue(job);
@@ -1896,8 +2001,9 @@ public sealed partial class MainViewModel : ObservableObject
     private void ShowAbout()
     {
         var version = typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "?";
-        _dialogs.Info($"MovieWorker {version}\nVideoschnitt für Canon EOS R6 Mark II und EOS 70D.\n\n{_tools.StatusText}\n\n"
-            + "Lizenz: Apache 2.0 · Videoverarbeitung: FFmpeg (ffmpeg.org)", "Über MovieWorker");
+        var gpu = _tools.HardwareEncoders is { Count: > 0 } hw ? string.Join(", ", hw.Select(h => h.ToString())) : "keine erkannt (Export mit dem Prozessor)";
+        _dialogs.Info($"MovieWorker {version}\nVideoschnitt für Canon EOS R6 Mark II und EOS 70D.\n\n{_tools.StatusText}\nGrafikkarten-Kodierung: {gpu}\n\n"
+            + "Lizenz: Apache 2.0 · Videoverarbeitung: FFmpeg (ffmpeg.org)\nAnleitung: Hilfe → Anleitung (F1)", "Über MovieWorker");
     }
 
     // ---------------------------------------------------------------- intern
