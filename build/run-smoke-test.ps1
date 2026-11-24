@@ -17,7 +17,7 @@ if (Test-Path $logPath) {
     $lines | ForEach-Object { Write-Host $_ }
     $errorIndex = -1
     for ($i = 0; $i -lt $lines.Count; $i++) {
-        if ($lines[$i] -like '*FEHLER*') {
+        if ($lines[$i] -clike '*FEHLER*') {
             if ($errorIndex -lt 0) { $errorIndex = $i }
             Write-Host "::error::$($lines[$i])"
         }

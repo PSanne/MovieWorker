@@ -12,8 +12,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 4 | Vorschau & Proxys | ✅ fertig |
 | 5 | Ausgabe: Export-Dialog, Plattform-Vorlagen, Warteschlange (→ v0.5) | ✅ fertig |
 | 6 | Medien-Arbeitsbereich: Ordner, Metadaten, Bild-Ton-Synchronisation | ✅ fertig |
-| 7 | Schnellschnitt-Arbeitsbereich: Doppel-Timeline, Quellband, Einfügemodi | ⏳ als Nächstes |
-| 8 | Profi-Schnitt: Trimm-Modi, Keyframes, Geschwindigkeitsrampen, verschachtelte Clips | geplant |
+| 7 | Schnellschnitt-Arbeitsbereich: Doppel-Timeline, Quellband, Einfügemodi | ✅ fertig |
+| 8 | Profi-Schnitt: Trimm-Modi, Keyframes, Geschwindigkeitsrampen, verschachtelte Clips | ⏳ als Nächstes |
 | 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | geplant |
 | 10 | Mehrspur, Multicam & Mischmodi | geplant |
 | 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | geplant |
@@ -73,7 +73,7 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Metadaten: Bewertung (Sterne), Schlagwörter, Notizen, Szene/Take; Suchen und Filtern
 - Bild-Ton-Synchronisation: externen Ton (Rekorder) per Wellenform automatisch an den Kameraton anlegen
 
-## Sprint 7 – Schnellschnitt-Arbeitsbereich
+## Sprint 7 – Schnellschnitt-Arbeitsbereich ✅
 - Doppel-Timeline: oben die ganze Timeline, unten der Ausschnitt um den Abspielkopf
 - Quellband: alle Aufnahmen hintereinander wie ein langes Band durchsehen
 - Einfügemodi: Einfügen (Insert), Überschreiben, Ersetzen, Anhängen, Oben platzieren

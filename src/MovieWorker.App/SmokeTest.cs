@@ -8,6 +8,7 @@ using MovieWorker.App.ViewModels;
 using MovieWorker.App.Views;
 using MovieWorker.Core.Camera;
 using MovieWorker.Core.Settings;
+using MovieWorker.Core.Timeline;
 
 namespace MovieWorker.App;
 
@@ -303,6 +304,47 @@ public static class SmokeTest
         c.Check(externalClip is not null && externalClip.StartFrame == syncedClip.StartFrame && syncedClip.AudioMuted,
             "Synchronisierter Ton liegt passend in der Timeline, Kameraton stumm");
         SaveScreenshot(window, Path.Combine(c.OutputFolder, "medienpool.png"));
+        clipCount = vm.Project.AllClips.Count();
+
+        // ---- Schnellschnitt (Sprint 7): Einfügemodi, Quellband, Doppel-Timeline
+        vm.ShowOverview = true;
+        vm.SelectedMedia = byR6;
+        await Settle(400);
+        var src = window.SourceMonitorControl;
+        src.SetPosition(0.5);
+        src.MarkIn();
+        src.SetPosition(1.5);
+        src.MarkOut();
+        var rate = vm.Project.Settings.FrameRate;
+        var length = rate.SecondsToFrames(1.0);
+        vm.SelectedClipId = null;
+        vm.PlayheadFrame = 5;
+        var durationBefore = vm.Editor.Duration;
+        var inserted = src.Edit(EditMode.Insert);
+        c.Check(inserted is not null && vm.Editor.Duration == durationBefore + length && vm.PlayheadFrame == 5 + length,
+            "F9 Einfügen schiebt alles nach hinten");
+        var overwritten = src.Edit(EditMode.Overwrite);
+        c.Check(overwritten is not null && vm.Editor.Duration == durationBefore + length, "F10 Überschreiben ändert die Länge nicht");
+        var replaced = src.Edit(EditMode.Replace);
+        c.Check(replaced is not null && vm.Project.FindClip(replaced.Id)!.Value.Clip.StartFrame == overwritten!.StartFrame
+            && vm.Project.FindClip(overwritten.Id) is null, "F11 Ersetzen behält Position");
+        vm.SelectedClipId = null;
+        vm.PlayheadFrame = 0;
+        var onTop = src.Edit(EditMode.PlaceOnTop);
+        c.Check(onTop is not null && vm.Project.FindClip(onTop.Id)!.Value.Track.Name != "V1", "F12 Oben platzieren (B-Roll)");
+        vm.SelectedClipId = null;
+        var appended7 = src.Edit(EditMode.Append);
+        c.Check(appended7 is not null && vm.Project.FindClip(appended7.Id)!.Value.Clip.EndFrame == vm.Project.VideoTracks.First().Clips.Max(cl => cl.EndFrame),
+            "Umschalt+F12 Anhängen");
+        vm.SourceTapeMode = true;
+        await Settle(400);
+        c.Check(src.IsTapeMode && src.CurrentItem is not null, "Quellband aktiv");
+        vm.SelectedMedia = by70D;
+        await Settle(300);
+        c.Check(src.CurrentItem == by70D, "Quellband springt zur gewählten Aufnahme");
+        vm.SourceTapeMode = false;
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "schnellschnitt.png"));
+        vm.ShowOverview = false;
         clipCount = vm.Project.AllClips.Count();
 
         // ---- Speichern & Laden

@@ -62,6 +62,16 @@
                 <MenuItem Header="Externen Ton _automatisch synchronisieren" Command="{Binding AutoSyncAllCommand}" />
                 <MenuItem Header="Tonspur hinzufügen" Command="{Binding AddAudioTrackCommand}" />
             </MenuItem>
+            <MenuItem Header="_Schnitt">
+                <MenuItem Header="_Einfügen (Ripple)" InputGestureText="F9" Click="OnEditMenu" Tag="Insert" />
+                <MenuItem Header="Ü_berschreiben" InputGestureText="F10" Click="OnEditMenu" Tag="Overwrite" />
+                <MenuItem Header="E_rsetzen" InputGestureText="F11" Click="OnEditMenu" Tag="Replace" />
+                <MenuItem Header="_Oben platzieren" InputGestureText="F12" Click="OnEditMenu" Tag="PlaceOnTop" />
+                <MenuItem Header="_Anhängen" InputGestureText="Umschalt+F12" Click="OnEditMenu" Tag="Append" />
+                <Separator />
+                <MenuItem Header="_Quellband" IsCheckable="True" IsChecked="{Binding SourceTapeMode}" />
+                <MenuItem Header="_Doppel-Timeline" IsCheckable="True" IsChecked="{Binding ShowOverview}" />
+            </MenuItem>
             <MenuItem Header="_Wiedergabe">
                 <MenuItem Header="Abspielen / Pause" InputGestureText="Leertaste" Click="OnPlayPause" />
                 <MenuItem Header="Rückwärts / Stopp / Vorwärts" InputGestureText="J / K / L" IsEnabled="False" />
@@ -450,10 +460,23 @@
                     <Button Content="+" ToolTip="Vergrößern (+)" Click="OnZoomIn" Width="24" />
                     <Button Content="Einpassen" ToolTip="Ganze Timeline zeigen (Umschalt+Z)" Click="OnZoomFit" />
                     <Separator />
+                    <ToggleButton Content="Doppel-Timeline" ToolTip="Übersicht der ganzen Timeline über der Detailansicht"
+                                  IsChecked="{Binding ShowOverview}" />
+                    <Separator />
                     <Button Content="+ Videospur" Command="{Binding AddVideoTrackCommand}" />
                     <Button Content="+ Tonspur" Command="{Binding AddAudioTrackCommand}" />
                 </ToolBar>
                 <ScrollBar DockPanel.Dock="Bottom" x:Name="TimelineScroll" Orientation="Horizontal" Scroll="OnTimelineScroll" />
+                <Border DockPanel.Dock="Top" BorderBrush="#444" BorderThickness="0,0,0,2" MaxHeight="140"
+                        Visibility="{Binding ShowOverview, Converter={StaticResource BoolToVisibility}}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="#1E1F22">
+                        <c:TimelineView x:Name="OverviewTimeline" Compact="True"
+                                        Project="{Binding Project}"
+                                        Playhead="{Binding PlayheadFrame}"
+                                        SelectedClipId="{Binding SelectedClipId}"
+                                        Snapping="{Binding Snapping}" />
+                    </ScrollViewer>
+                </Border>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="#1E1F22">
                     <c:TimelineView x:Name="Timeline"
                                     Project="{Binding Project}"

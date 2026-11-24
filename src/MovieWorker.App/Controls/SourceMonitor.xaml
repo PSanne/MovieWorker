@@ -16,11 +16,21 @@
                     <Rectangle x:Name="RangeBar" Height="4" Fill="#7FB8FF" Canvas.Top="1" />
                 </Canvas>
             </Grid>
+            <WrapPanel HorizontalAlignment="Center" Margin="0,2,0,0">
+                <Button Content="Einfügen" Margin="2" Padding="6,0" Tag="Insert" Click="OnEdit"
+                        ToolTip="F9 – am Abspielkopf einfügen, alles dahinter rückt nach" />
+                <Button Content="Überschreiben" Margin="2" Padding="6,0" Tag="Overwrite" Click="OnEdit"
+                        ToolTip="F10 – am Abspielkopf überschreiben, nichts verschiebt sich" />
+                <Button Content="Ersetzen" Margin="2" Padding="6,0" Tag="Replace" Click="OnEdit"
+                        ToolTip="F11 – den ausgewählten Timeline-Clip ersetzen (gleiche Länge)" />
+                <Button Content="Oben" Margin="2" Padding="6,0" Tag="PlaceOnTop" Click="OnEdit"
+                        ToolTip="F12 – auf die nächste freie Videospur darüber legen (B-Roll)" />
+                <Button Content="Anhängen" Margin="2" Padding="6,0" Tag="Append" Click="OnEdit"
+                        ToolTip="Umschalt+F12 – ans Ende der Timeline anhängen" />
+            </WrapPanel>
             <DockPanel Height="32">
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,0,4,0">
-                    <Button Content="Ans Ende" Margin="2" Padding="6,0" ToolTip="Ausschnitt ans Ende der Timeline anhängen" Click="OnAppend" />
-                    <Button Content="Am Abspielkopf" Margin="2" Padding="6,0" ToolTip="Ausschnitt am Abspielkopf einfügen (falls dort Platz ist)" Click="OnInsert" />
-                </StackPanel>
+                <ToggleButton DockPanel.Dock="Right" x:Name="TapeToggle" Content="Quellband" Margin="2,2,6,2" Padding="6,0"
+                              ToolTip="Alle Aufnahmen (wie im Medienpool gefiltert) als ein durchgehendes Band" Click="OnTapeToggle" />
                 <StackPanel Orientation="Horizontal">
                     <Button Content="▶" x:Name="PlayButton" Width="40" Margin="2" Click="OnPlay" />
                     <Button Content="In" Width="34" Margin="2" ToolTip="In-Punkt setzen" Click="OnMarkIn" />

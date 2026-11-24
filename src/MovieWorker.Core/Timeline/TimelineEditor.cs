@@ -164,6 +164,158 @@ public sealed class TimelineEditor
         });
     }
 
+    /// <summary>
+    /// Schnitt nach <paramref name="mode"/>: Anhängen, Einfügen (Ripple), Überschreiben, Ersetzen oder Oben platzieren.
+    /// Optional kommt synchronisierter externer Ton mit (auf eine Tonspur, bevorzugt A2). Ein Rückgängig-Schritt.
+    /// </summary>
+    public bool Place(EditMode mode, Guid trackId, TimelineClip clip, long at, TimelineClip? linkedAudio = null,
+        long audioOffsetFrames = 0, Guid? replaceClipId = null)
+    {
+        return Modify(EditModeInfo.Label(mode), p =>
+        {
+            var track = p.Tracks.FirstOrDefault(t => t.Id == trackId);
+            if (track is null)
+            {
+                return false;
+            }
+
+            switch (mode)
+            {
+                case EditMode.Append:
+                    at = track.Clips.Select(c => c.EndFrame).DefaultIfEmpty(0).Max();
+                    break;
+                case EditMode.Insert:
+                    RippleInsertSpace(p, at, clip.LengthFrames);
+                    break;
+                case EditMode.Overwrite:
+                    ClearRange(track, at, at + clip.LengthFrames, p.Settings.FrameRate);
+                    break;
+                case EditMode.Replace:
+                {
+                    var target = track.Clips.FirstOrDefault(c => c.Id == replaceClipId);
+                    if (target is null)
+                    {
+                        return false;
+                    }
+
+                    at = target.StartFrame;
+                    clip.LengthFrames = Math.Min(clip.LengthFrames, target.LengthFrames);
+                    track.Clips.Remove(target);
+                    break;
+                }
+
+                case EditMode.PlaceOnTop:
+                {
+                    var videoTracks = p.Tracks.Where(t => t.Kind == track.Kind).ToList();
+                    var above = videoTracks.Skip(videoTracks.IndexOf(track) + 1).FirstOrDefault(t => t.IsFree(at, clip.LengthFrames));
+                    if (above is null)
+                    {
+                        above = new TimelineTrack { Kind = track.Kind, Name = $"{(track.Kind == TrackKind.Video ? "V" : "A")}{videoTracks.Count + 1}" };
+                        var lastIndex = p.Tracks.FindLastIndex(t => t.Kind == track.Kind);
+                        p.Tracks.Insert(lastIndex + 1, above);
+                    }
+
+                    track = above;
+                    break;
+                }
+            }
+
+            if (at < 0 || !track.IsFree(at, clip.LengthFrames))
+            {
+                return false;
+            }
+
+            clip.StartFrame = at;
+            track.Clips.Add(clip);
+
+            if (linkedAudio is not null)
+            {
+                linkedAudio.StartFrame = at + audioOffsetFrames;
+                var audioTracks = p.AudioTracks.Skip(1).Concat(p.AudioTracks.Take(1)).ToList();
+                if (mode == EditMode.Overwrite && audioTracks.Count > 0)
+                {
+                    ClearRange(audioTracks[0], linkedAudio.StartFrame, linkedAudio.EndFrame, p.Settings.FrameRate);
+                }
+
+                var audioTrack = audioTracks.FirstOrDefault(t => t.IsFree(linkedAudio.StartFrame, linkedAudio.LengthFrames));
+                if (audioTrack is null)
+                {
+                    audioTrack = new TimelineTrack { Kind = TrackKind.Audio, Name = $"A{p.AudioTracks.Count() + 1}" };
+                    p.Tracks.Add(audioTrack);
+                }
+
+                audioTrack.Clips.Add(linkedAudio);
+            }
+
+            return true;
+        });
+    }
+
+    /// <summary>Schafft auf allen Spuren Platz: Clips am Punkt werden geteilt, alles dahinter rückt nach.</summary>
+    internal static void RippleInsertSpace(MovieProject project, long at, long length)
+    {
+        var rate = project.Settings.FrameRate;
+        foreach (var track in project.Tracks)
+        {
+            foreach (var clip in track.Clips.Where(c => c.StartFrame < at && c.EndFrame > at).ToList())
+            {
+                var right = SplitClip(clip, at, rate);
+                track.Clips.Add(right);
+            }
+
+            foreach (var clip in track.Clips.Where(c => c.StartFrame >= at))
+            {
+                clip.StartFrame += length;
+            }
+        }
+    }
+
+    /// <summary>Macht den Bereich [start, end) einer Spur frei: Clips werden gekürzt, geteilt oder entfernt.</summary>
+    internal static void ClearRange(TimelineTrack track, long start, long end, Time.FrameRate rate)
+    {
+        foreach (var clip in track.Clips.Where(c => c.StartFrame < end && c.EndFrame > start).ToList())
+        {
+            if (clip.StartFrame >= start && clip.EndFrame <= end)
+            {
+                track.Clips.Remove(clip);
+            }
+            else if (clip.StartFrame < start && clip.EndFrame > end)
+            {
+                var right = SplitClip(clip, end, rate);
+                track.Clips.Add(right);
+                clip.LengthFrames = start - clip.StartFrame;
+                clip.FadeOutFrames = 0;
+            }
+            else if (clip.StartFrame < start)
+            {
+                clip.LengthFrames = start - clip.StartFrame;
+                clip.FadeOutFrames = Math.Min(clip.FadeOutFrames, clip.LengthFrames);
+            }
+            else
+            {
+                var cut = end - clip.StartFrame;
+                clip.SourceIn += rate.FramesToSeconds(cut) * clip.Speed;
+                clip.StartFrame = end;
+                clip.LengthFrames -= cut;
+                clip.FadeInFrames = Math.Min(clip.FadeInFrames, clip.LengthFrames);
+            }
+        }
+    }
+
+    /// <summary>Teilt einen Clip; der linke Teil bleibt im Clip, der rechte wird zurückgegeben.</summary>
+    internal static TimelineClip SplitClip(TimelineClip clip, long frame, Time.FrameRate rate)
+    {
+        var right = clip.Clone();
+        right.Id = Guid.NewGuid();
+        right.StartFrame = frame;
+        right.LengthFrames = clip.EndFrame - frame;
+        right.SourceIn = clip.SourceTimeAt(frame, rate);
+        right.FadeInFrames = 0;
+        clip.LengthFrames = frame - clip.StartFrame;
+        clip.FadeOutFrames = 0;
+        return right;
+    }
+
     /// <summary>Teilt alle Clips an der Abspielposition (oder nur einen bestimmten Clip).</summary>
     public bool SplitAt(long frame, Guid? onlyClip = null)
     {

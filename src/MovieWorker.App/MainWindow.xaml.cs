@@ -37,6 +37,10 @@ public partial class MainWindow : Window
         Timeline.TrackMuteToggled += (_, id) => _viewModel.ToggleTrackMute(id);
         Timeline.ClipDoubleClicked += (_, _) => ClipTab.IsSelected = true;
         Timeline.ViewChanged += (_, _) => SyncScrollBar();
+        OverviewTimeline.ClipMoveRequested += (_, e) => _viewModel.MoveClip(e.ClipId, e.NewStart, e.TrackId);
+        OverviewTimeline.ClipTrimRequested += (_, e) => _viewModel.TrimClip(e.ClipId, e.AtStart, e.Delta);
+        OverviewTimeline.MediaDropped += (_, e) => _viewModel.InsertMediaAt(e.MediaId, e.TrackId, e.Frame);
+        OverviewTimeline.SizeChanged += (_, _) => OverviewTimeline.ZoomToFit();
         Loaded += (_, _) => SyncScrollBar();
         SourceMonitor.Attach(viewModel);
         viewModel.ExportQueue.Jobs.CollectionChanged += (_, _) =>
@@ -59,6 +63,14 @@ public partial class MainWindow : Window
     public SourceMonitor SourceMonitorControl => SourceMonitor;
 
     private void OnPlayPause(object sender, RoutedEventArgs e) => ProgramMonitor.TogglePlay();
+
+    private void OnEditMenu(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string tag } && Enum.TryParse<EditMode>(tag, out var mode))
+        {
+            SourceMonitor.Edit(mode);
+        }
+    }
 
     protected override async void OnClosing(CancelEventArgs e)
     {
@@ -107,6 +119,21 @@ public partial class MainWindow : Window
         {
             case Key.Space:
                 if (sourceFocused) SourceMonitor.TogglePlay(); else ProgramMonitor.TogglePlay();
+                break;
+            case Key.F9:
+                SourceMonitor.Edit(EditMode.Insert);
+                break;
+            case Key.F10:
+                SourceMonitor.Edit(EditMode.Overwrite);
+                break;
+            case Key.F11:
+                SourceMonitor.Edit(EditMode.Replace);
+                break;
+            case Key.F12:
+                SourceMonitor.Edit(shift ? EditMode.Append : EditMode.PlaceOnTop);
+                break;
+            case Key.System when e.SystemKey == Key.F10:
+                SourceMonitor.Edit(EditMode.Overwrite);
                 break;
             case Key.J when !ctrl:
                 ProgramMonitor.Shuttle(-1);
@@ -186,6 +213,11 @@ public partial class MainWindow : Window
     {
         Timeline.InvalidateMeasure();
         Timeline.InvalidateVisual();
+        OverviewTimeline.InvalidateMeasure();
+        if (_viewModel.ShowOverview)
+        {
+            OverviewTimeline.ZoomToFit();
+        }
         if (_firstLayout && _viewModel.Project.AllClips.Any())
         {
             _firstLayout = false;
@@ -315,6 +347,12 @@ public partial class MainWindow : Window
                 break;
             case nameof(MainViewModel.PlayheadFrame):
                 Timeline.FollowPlayhead();
+                break;
+            case nameof(MainViewModel.SourceTapeMode):
+                SourceMonitor.SetTapeMode(_viewModel.SourceTapeMode);
+                break;
+            case nameof(MainViewModel.ShowOverview) when _viewModel.ShowOverview:
+                Dispatcher.BeginInvoke(() => OverviewTimeline.ZoomToFit());
                 break;
         }
     }

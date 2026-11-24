@@ -7,7 +7,7 @@ Es ist auf Material der **Canon EOS R6 Mark II** und der **Canon EOS 70D** zuges
 professionelle Videos machen: vom Import der Speicherkarte über den Schnitt bis zum Export als
 H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 
-> **Stand: Sprint 6 von 16 abgeschlossen (Version 0.5 + Medien-Arbeitsbereich).** Die erste voll nutzbare Version: importieren, schneiden,
+> **Stand: Sprint 7 von 16 abgeschlossen (Version 0.5 + Medien-Arbeitsbereich + Schnellschnitt).** Die erste voll nutzbare Version: importieren, schneiden,
 > abspielen und für YouTube, Instagram/TikTok oder als Master exportieren. Den kompletten Plan findest du in
 > **[docs/SPRINTS.md](docs/SPRINTS.md)**.
 
@@ -33,6 +33,7 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | **Ordnen** | **Ordner** (anlegen, umbenennen, löschen; Aufnahmen im Inspektor einsortieren) · **Bewertung** (0–5 Sterne), **Schlagwörter**, **Szene/Take**, **Notizen** · **Suche** über Name, Schlagwörter, Notizen, Szene und Take · Filter (Video/Ton, Mindestbewertung) · Sortierung nach Name, Aufnahmezeit, Bewertung oder Länge |
 | **Bild-Ton-Sync** | Externen Ton (z. B. Zoom-/Tascam-Rekorder) per Wellenform an den Kameraton anlegen – auf 5 ms genau, auch wenn der Rekorder früher oder später gestartet wurde · *Bearbeiten → Externen Ton automatisch synchronisieren* probiert alle Kombinationen · beim Einfügen kommt der passende Ausschnitt des externen Tons automatisch auf A2, der Kameraton wird stummgeschaltet (abschaltbar) |
 | **Timeline** | Clips per Doppelklick oder Ziehen aus dem Medienpool einfügen · verschieben (auch auf andere Spuren), an den Rändern trimmen · Einrasten an Schnittpunkten, Abspielkopf und Marken · Vorschaubilder und Ton-Wellenform in den Clips · Spuren hinzufügen und stummschalten |
+| **Schnellschnitt** | Fünf Schnittarten aus dem Quellmonitor: **Einfügen** (F9, alles dahinter rückt auf allen Spuren nach), **Überschreiben** (F10), **Ersetzen** (F11, gleiche Position und Länge), **Oben platzieren** (F12, B-Roll auf die nächste freie Videospur), **Anhängen** (Umschalt+F12) · **Quellband**: alle (gefilterten) Aufnahmen als ein durchgehendes Band durchsehen, In/Out setzen und schneiden · **Doppel-Timeline**: oben die ganze Timeline, unten der Ausschnitt zum Arbeiten |
 | **Clip-Inspektor** | Position und Länge als Timecode · Geschwindigkeit (Zeitlupe/Zeitraffer) · „Als Zeitlupe abspielen“ für 150/180-fps-Clips · Lautstärke, Ton stumm, Ein-/Ausblenden |
 | **Monitore** | *Quelle*: Aufnahme ansehen, In/Out setzen, Ausschnitt ans Ende oder am Abspielkopf einfügen · *Programm*: Timeline abspielen; im Stillstand exaktes Standbild mit LUT/HDR-Umrechnung wie im Export · J/K/L-Shuttle |
 | **Proxys** | Für Aufnahmen, die Windows nicht flüssig abspielt (4K-HEVC 10 Bit 4:2:2, HDR, MOV mit LPCM), entsteht automatisch eine Vorschaudatei: 70D-Clips werden nur neu verpackt (Sekunden), R6-HEVC wird als 540p-H.264 kodiert, HDR dabei nach SDR umgerechnet · geteilte Aufnahmen ergeben einen Proxy · Menü *Wiedergabe → Vorschau mit Proxys* schaltet aufs Original um · der Export nutzt immer die Originale |
@@ -57,6 +58,7 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | Rückgängig / Wiederholen | Strg+Z / Strg+Y |
 | Neu / Öffnen / Speichern | Strg+N / Strg+O / Strg+S |
 | Exportieren / Einzelbild | Strg+E / Strg+Umschalt+E |
+| Einfügen / Überschreiben / Ersetzen / Oben / Anhängen | F9 / F10 / F11 / F12 / Umschalt+F12 |
 
 ## Funktionen des Kerns (Sprint 1)
 

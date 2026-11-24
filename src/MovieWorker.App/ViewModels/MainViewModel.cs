@@ -220,6 +220,14 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _snapping = true;
 
+    /// <summary>Doppel-Timeline: zusätzliche Übersicht der ganzen Timeline über der Detailansicht.</summary>
+    [ObservableProperty]
+    private bool _showOverview;
+
+    /// <summary>Quellmonitor zeigt alle (gefilterten) Aufnahmen als ein Band.</summary>
+    [ObservableProperty]
+    private bool _sourceTapeMode;
+
     public string PlayheadText => Timecode.FromFrames(PlayheadFrame, Project.Settings.FrameRate, Project.Settings.DropFrameTimecode);
 
     public bool HasSelectedClip => SelectedClipId is not null && Project.FindClip(SelectedClipId.Value) is not null;
@@ -723,6 +731,69 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Hängt eine Aufnahme (oder einen Ausschnitt) ans Ende der passenden Spur an.</summary>
+    /// <summary>
+    /// Schnitt aus dem Quellmonitor nach Modus (F9 Einfügen, F10 Überschreiben, F11 Ersetzen, F12 Oben,
+    /// Umschalt+F12 Anhängen). Zielspur: Spur des ausgewählten Clips (falls passend), sonst V1 bzw. A1.
+    /// </summary>
+    public TimelineClip? PlaceFromSource(EditMode mode, MediaItem media, double sourceIn, double? sourceOut)
+    {
+        AdoptSettingsIfFirstClip(media);
+        var kind = media.IsAudioOnly ? TrackKind.Audio : TrackKind.Video;
+        var selected = SelectedClipId is { } id ? Project.FindClip(id) : null;
+        var track = selected is { } sel && sel.Track.Kind == kind ? sel.Track : Project.Tracks.First(t => t.Kind == kind);
+        if (mode == EditMode.Replace && selected is null)
+        {
+            StatusText = "Ersetzen: Bitte zuerst den Clip in der Timeline auswählen, der ersetzt werden soll.";
+            return null;
+        }
+
+        if (mode == EditMode.Replace && selected!.Value.Track.Kind != kind)
+        {
+            StatusText = "Ersetzen geht nur mit gleicher Art (Video durch Video, Ton durch Ton).";
+            return null;
+        }
+
+        var clip = Editor.CreateClip(media, sourceIn, sourceOut);
+        ApplyDefaultColor(clip, media);
+        var (audioClip, audioOffset) = SyncedAudioFor(media, clip);
+        var replaceId = mode == EditMode.Replace ? selected!.Value.Clip.Id : (Guid?)null;
+        if (!Editor.Place(mode, track.Id, clip, PlayheadFrame, audioClip, audioOffset, replaceId))
+        {
+            StatusText = $"{EditModeInfo.Label(mode)} nicht möglich – dort ist kein Platz.";
+            return null;
+        }
+
+        SelectedClipId = clip.Id;
+        if (mode is EditMode.Insert or EditMode.Overwrite or EditMode.Append)
+        {
+            PlayheadFrame = Project.FindClip(clip.Id)?.Clip.EndFrame ?? PlayheadFrame;
+        }
+
+        StatusText = $"{EditModeInfo.Label(mode)}: „{media.Name}“" + (audioClip is null ? "." : " mit synchronisiertem Ton.");
+        return clip;
+    }
+
+    /// <summary>Synchronisierter externer Ton passend zu einem neuen Videoclip (oder null).</summary>
+    private (TimelineClip? Clip, long OffsetFrames) SyncedAudioFor(MediaItem media, TimelineClip clip)
+    {
+        var rate = Project.Settings.FrameRate;
+        if (media.IsAudioOnly || media.SyncedAudio is not { } sync || Project.FindMedia(sync.AudioMediaId) is not { } audio
+            || SyncedAudioPlacement.For(clip, sync.OffsetSeconds, audio.Duration.TotalSeconds, rate) is not { } placement)
+        {
+            return (null, 0);
+        }
+
+        var audioClip = Editor.CreateClip(audio, placement.SourceIn, null);
+        audioClip.LengthFrames = placement.LengthFrames;
+        audioClip.Name = audio.Name + " (synchron)";
+        if (sync.ReplaceCameraAudio)
+        {
+            clip.AudioMuted = true;
+        }
+
+        return (audioClip, placement.StartOffsetFrames);
+    }
+
     public TimelineClip AddToTimeline(MediaItem media, double sourceIn = 0, double? sourceOut = null) =>
         PlaceMedia(media, sourceIn, sourceOut, null, null)
         ?? throw new InvalidOperationException("Anhängen am Ende ist immer möglich.");
@@ -739,22 +810,7 @@ public sealed partial class MainViewModel : ObservableObject
         var clip = Editor.CreateClip(media, sourceIn, sourceOut);
         ApplyDefaultColor(clip, media);
 
-        TimelineClip? audioClip = null;
-        long audioOffset = 0;
-        var rate = Project.Settings.FrameRate;
-        if (!media.IsAudioOnly && media.SyncedAudio is { } sync && Project.FindMedia(sync.AudioMediaId) is { } audio
-            && SyncedAudioPlacement.For(clip, sync.OffsetSeconds, audio.Duration.TotalSeconds, rate) is { } placement)
-        {
-            audioClip = Editor.CreateClip(audio, placement.SourceIn, null);
-            audioClip.LengthFrames = placement.LengthFrames;
-            audioClip.Name = audio.Name + " (synchron)";
-            audioOffset = placement.StartOffsetFrames;
-            if (sync.ReplaceCameraAudio)
-            {
-                clip.AudioMuted = true;
-            }
-        }
-
+        var (audioClip, audioOffset) = SyncedAudioFor(media, clip);
         if (!Editor.InsertWithAudio(track, clip, start, audioClip, audioOffset))
         {
             return null;

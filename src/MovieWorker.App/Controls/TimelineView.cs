@@ -39,8 +39,8 @@ public sealed class TimelineView : FrameworkElement
     public const string MediaDragFormat = "MovieWorker.MediaId";
     public const double RulerHeight = 30;
     public const double HeaderWidth = 120;
-    private const double VideoTrackHeight = 70;
-    private const double AudioTrackHeight = 52;
+    private double VideoTrackHeight => Compact ? 26 : 70;
+    private double AudioTrackHeight => Compact ? 18 : 52;
     private const double EdgeGrab = 7;
     private const double SnapPixels = 10;
 
@@ -55,6 +55,10 @@ public sealed class TimelineView : FrameworkElement
     public static readonly DependencyProperty SelectedClipIdProperty = DependencyProperty.Register(
         nameof(SelectedClipId), typeof(Guid?), typeof(TimelineView),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
+
+    public static readonly DependencyProperty CompactProperty = DependencyProperty.Register(
+        nameof(Compact), typeof(bool), typeof(TimelineView),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static readonly DependencyProperty SnappingProperty = DependencyProperty.Register(
         nameof(Snapping), typeof(bool), typeof(TimelineView), new FrameworkPropertyMetadata(true));
@@ -141,6 +145,13 @@ public sealed class TimelineView : FrameworkElement
     {
         get => (Guid?)GetValue(SelectedClipIdProperty);
         set => SetValue(SelectedClipIdProperty, value);
+    }
+
+    /// <summary>Kompakte Übersicht (Doppel-Timeline): niedrige Spuren, ohne Vorschaubilder und Wellenformen.</summary>
+    public bool Compact
+    {
+        get => (bool)GetValue(CompactProperty);
+        set => SetValue(CompactProperty, value);
     }
 
     public bool Snapping
@@ -378,7 +389,7 @@ public sealed class TimelineView : FrameworkElement
 
         // Vorschaubild am Clipanfang
         var textLeft = rect.Left + 4;
-        if (isVideo && clip.HasVideo && rect.Width > 30 && ThumbnailProvider?.Invoke(clip) is { } thumb && thumb.Height > 0)
+        if (!Compact && isVideo && clip.HasVideo && rect.Width > 30 && ThumbnailProvider?.Invoke(clip) is { } thumb && thumb.Height > 0)
         {
             var h = rect.Height - 4;
             var w = h * thumb.Width / thumb.Height;
@@ -391,7 +402,7 @@ public sealed class TimelineView : FrameworkElement
         }
 
         // Wellenform (Ton der Quelle, passend zum Ausschnitt)
-        if (clip.HasAudio && WaveformProvider?.Invoke(clip) is { } wave)
+        if (!Compact && clip.HasAudio && WaveformProvider?.Invoke(clip) is { } wave)
         {
             var waveTop = isVideo ? rect.Top + rect.Height * 0.62 : rect.Top + 14;
             var waveHeight = isVideo ? rect.Height * 0.36 : rect.Height - 16;
@@ -418,7 +429,8 @@ public sealed class TimelineView : FrameworkElement
 
         if (rect.Width > 40)
         {
-            DrawText(dc, label, new Point(textLeft, rect.Top + 1), 11, TextBrush, dpi, rect.Right - textLeft - 4, background: BadgeBrush);
+            DrawText(dc, label, new Point(textLeft, rect.Top + 1), Compact ? 9 : 11, TextBrush, dpi, rect.Right - textLeft - 4,
+                background: Compact ? null : BadgeBrush);
         }
 
         var badge = clip.ColorTransform switch
@@ -427,7 +439,7 @@ public sealed class TimelineView : FrameworkElement
             ColorTransform.HdrToSdr => "HDR→SDR",
             _ => null,
         };
-        if (badge is not null && rect.Width > 90)
+        if (badge is not null && rect.Width > 90 && !Compact)
         {
             DrawText(dc, badge, new Point(textLeft, rect.Top + 16), 9, TextBrush, dpi, 80, background: BadgeBrush);
         }
@@ -530,6 +542,12 @@ public sealed class TimelineView : FrameworkElement
         {
             var rect = new Rect(0, row.Top, HeaderWidth, row.Height);
             dc.DrawRectangle(HeaderBrush, null, rect);
+            if (Compact)
+            {
+                DrawText(dc, row.Track.Name, new Point(8, row.Top + 2), 10, TextBrush, dpi, HeaderWidth - 12);
+                continue;
+            }
+
             DrawText(dc, row.Track.Name, new Point(8, row.Top + 6), 12, TextBrush, dpi, HeaderWidth - 40);
             DrawText(dc, row.Track.Kind == TrackKind.Video ? "Video + Kameraton" : "Ton", new Point(8, row.Top + 24), 9, DimTextBrush, dpi, HeaderWidth - 12);
             var mute = MuteRect(row);
@@ -606,7 +624,7 @@ public sealed class TimelineView : FrameworkElement
 
         if (p.X < HeaderWidth)
         {
-            if (RowAt(p.Y) is { } headerRow && MuteRect(headerRow).Contains(p))
+            if (!Compact && RowAt(p.Y) is { } headerRow && MuteRect(headerRow).Contains(p))
             {
                 TrackMuteToggled?.Invoke(this, headerRow.Track.Id);
             }
