@@ -294,6 +294,41 @@ public sealed partial class MainViewModel : ObservableObject
         return left is not null && Editor.Roll(left.Id, delta);
     }
 
+    /// <summary>Neuer Titel am Abspielkopf (5 Sekunden) mit der gewählten Vorlage.</summary>
+    [RelayCommand]
+    private void AddTitleFromMenu(string? style) => AddTitle(style);
+
+    public TimelineClip AddTitle(string? style)
+    {
+        var titleStyle = Enum.TryParse<TitleStyle>(style, out var parsed) ? parsed : TitleStyle.Headline;
+        var spec = TitleSpec.FromStyle(titleStyle);
+        var seconds = titleStyle == TitleStyle.Credits ? 12 : 5;
+        var clip = Editor.AddTitle(spec, PlayheadFrame, Project.Settings.FrameRate.SecondsToFrames(seconds));
+        SelectedClipId = clip.Id;
+        StatusText = "Titel eingefügt – Text und Gestaltung im Inspektor ändern.";
+        return clip;
+    }
+
+    /// <summary>Strg+D: Kreuzblende (1 s) am Schnitt, der dem Abspielkopf am nächsten liegt.</summary>
+    [RelayCommand]
+    public void AddDefaultTransition()
+    {
+        var track = SelectedClipId is { } id && Project.FindClip(id) is ({ Kind: TrackKind.Video } t, _) ? t : Project.VideoTracks.First();
+        var cut = track.OrderedClips
+            .Where(c => track.Clips.Any(prev => prev.EndFrame == c.StartFrame))
+            .OrderBy(c => Math.Abs(c.StartFrame - PlayheadFrame))
+            .FirstOrDefault();
+        if (cut is null)
+        {
+            StatusText = "Kein Schnitt zwischen zwei direkt aneinanderliegenden Clips gefunden.";
+            return;
+        }
+
+        Editor.SetTransition(cut.Id, new Transition { Type = TransitionType.Crossfade, DurationFrames = Project.Settings.FrameRate.NominalFps });
+        SelectedClipId = cut.Id;
+        StatusText = "Kreuzblende (1 s) eingefügt – Art und Länge im Inspektor ändern.";
+    }
+
     [RelayCommand]
     public void Nest()
     {

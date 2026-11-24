@@ -57,6 +57,12 @@ public partial class ProgramMonitor : UserControl
 
     public ImageSource? CurrentStill => Still.Source;
 
+    /// <summary>Wiedergabe zeigt Standbilder (kein Windows-Decoder für die Datei).</summary>
+    public bool IsStillMode => _stillMode;
+
+    /// <summary>Anzahl der gerade angezeigten Titelzeilen (für den Selbsttest).</summary>
+    public int TitleOverlayCount => TitleOverlay.Children.Count;
+
     /// <summary>Hinweistext im Monitor (z. B. Fehlermeldung der Vorschau) – für den Selbsttest.</summary>
     public string MessageText => Message.Text;
 
@@ -143,6 +149,7 @@ public partial class ProgramMonitor : UserControl
         }
 
         UpdateTexts();
+        UpdateTitleOverlay(_vm!.Project, _vm.PlayheadFrame, visible: false);
         RequestStill();
     }
 
@@ -185,6 +192,7 @@ public partial class ProgramMonitor : UserControl
         }
 
         SetPlayhead(frame);
+        UpdateTitleOverlay(project, frame, visible: true);
 
         // Rückwärts oder sehr schnell: Standbilder statt Player.
         var useStills = _speed < 0 || _speed > 2;
@@ -415,6 +423,29 @@ public partial class ProgramMonitor : UserControl
         {
             Still.Source = null;
             Message.Text = project.AllClips.Any() ? string.Empty : "Die Timeline ist leer.";
+            var screenHeight = (int)Math.Clamp(Screen.ActualHeight * VisualTreeHelper.GetDpi(this).DpiScaleY, 180, 1080) / 2 * 2;
+            if (PlaybackPlanner.TitleOnlyFilter(project, _vm.PlayheadFrame, screenHeight) is { } titleFilter)
+            {
+                // Nur Titel (über Schwarz)
+                var titleWidth = Math.Max(2, (int)Math.Round(project.Settings.Width * (double)screenHeight / project.Settings.Height / 2) * 2);
+                try
+                {
+                    var titleImage = await _vm.Thumbnails.RenderOnBlackAsync(titleWidth, screenHeight, titleFilter, token);
+                    if (!token.IsCancellationRequested)
+                    {
+                        Still.Source = titleImage;
+                        Still.Visibility = Visibility.Visible;
+                        Video.Visibility = Visibility.Hidden;
+                        StillsRendered++;
+                        return titleImage is not null;
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Message.Text = "Vorschau nicht möglich: " + ex.Message;
+                }
+            }
+
             return false;
         }
 
@@ -449,6 +480,97 @@ public partial class ProgramMonitor : UserControl
         finally
         {
             _stillBusy = false;
+        }
+    }
+
+    // ------------------------------------------------------------------ Titel beim Abspielen
+
+    /// <summary>
+    /// Zeigt Titel während der Wiedergabe als Ebene über dem Video (Schrift, Größe, Lage, Kasten, Ein-/Ausblenden).
+    /// Im Stillstand zeigt das ffmpeg-Standbild die Titel exakt wie im Export – dann ist die Ebene aus.
+    /// </summary>
+    private void UpdateTitleOverlay(MovieProject project, long frame, bool visible)
+    {
+        TitleOverlay.Children.Clear();
+        if (!visible || _stillMode)
+        {
+            return;
+        }
+
+        var rate = project.Settings.FrameRate;
+        var aspect = (double)project.Settings.Width / project.Settings.Height;
+        var w = Screen.ActualWidth;
+        var h = Screen.ActualHeight;
+        if (w <= 0 || h <= 0)
+        {
+            return;
+        }
+
+        // Bildfläche des Videos im Monitor (Stretch=Uniform)
+        var (vw, vh) = w / h > aspect ? (h * aspect, h) : (w, w / aspect);
+        var left = (w - vw) / 2;
+        var top = (h - vh) / 2;
+        var t = rate.FramesToSeconds(frame);
+        foreach (var clip in project.TitleTracks.Where(tr => !tr.Muted).SelectMany(tr => tr.Clips)
+                     .Where(c => c.Title is not null && c.Contains(frame)))
+        {
+            var spec = clip.Title!;
+            var start = rate.FramesToSeconds(clip.StartFrame);
+            var end = rate.FramesToSeconds(clip.EndFrame);
+            var anim = Math.Clamp(spec.AnimationSeconds, 0.05, Math.Max(0.05, (end - start) / 2));
+            var pIn = spec.AnimationIn == TitleAnimation.None ? 1 : Math.Clamp((t - start) / anim, 0, 1);
+            var pOut = spec.AnimationOut == TitleAnimation.None ? 1 : Math.Clamp((end - t) / anim, 0, 1);
+            var lines = spec.Lines;
+            var sizes = lines.Select((_, i) => vh * spec.SizePercent / 100 * (i == 0 ? 1 : spec.SecondaryScale)).ToList();
+            var block = sizes.Sum(s => s * 1.3);
+            var y = spec.Style == TitleStyle.Credits
+                ? vh - (t - start) / Math.Max(0.1, end - start) * (vh + block)
+                : spec.PositionY / 100 * vh - block / 2 + (spec.AnimationIn == TitleAnimation.SlideUp ? (1 - pIn) * vh * 0.08 : 0);
+            var dx = spec.AnimationIn == TitleAnimation.SlideLeft ? -(1 - pIn) * vw * 0.12 : 0;
+            var typed = spec.AnimationIn == TitleAnimation.Typewriter
+                ? (int)Math.Floor(Math.Clamp((t - start) / Math.Max(0.4, lines.Sum(l => l.Length) * 0.06), 0, 1) * lines.Sum(l => l.Length))
+                : int.MaxValue;
+            for (var i = 0; i < lines.Count; i++)
+            {
+                var text = typed == int.MaxValue ? lines[i] : lines[i][..Math.Clamp(typed, 0, lines[i].Length)];
+                typed = typed == int.MaxValue ? typed : Math.Max(0, typed - lines[i].Length);
+                var block1 = new TextBlock
+                {
+                    Text = text,
+                    FontFamily = new FontFamily(spec.FontFamily),
+                    FontWeight = spec.Bold ? FontWeights.Bold : FontWeights.Normal,
+                    FontSize = Math.Max(4, sizes[i] * 0.75),
+                    Foreground = ToBrush(spec.Color, Brushes.White),
+                    Background = spec.Box ? ToBrush(spec.BoxColor, Brushes.Black, spec.BoxOpacity) : null,
+                    Padding = spec.Box ? new Thickness(sizes[i] * 0.25, 0, sizes[i] * 0.25, 0) : default,
+                    Opacity = pIn * pOut,
+                };
+                block1.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                var x = spec.PositionX / 100 * vw + dx - spec.Align switch
+                {
+                    TitleAlign.Left => 0,
+                    TitleAlign.Right => block1.DesiredSize.Width,
+                    _ => block1.DesiredSize.Width / 2,
+                };
+                Canvas.SetLeft(block1, left + x);
+                Canvas.SetTop(block1, top + y + (sizes[i] * 1.3 - block1.DesiredSize.Height) / 2);
+                TitleOverlay.Children.Add(block1);
+                y += sizes[i] * 1.3;
+            }
+        }
+    }
+
+    private static Brush ToBrush(string color, Brush fallback, double opacity = 1)
+    {
+        try
+        {
+            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)) { Opacity = opacity };
+            brush.Freeze();
+            return brush;
+        }
+        catch (FormatException)
+        {
+            return fallback;
         }
     }
 

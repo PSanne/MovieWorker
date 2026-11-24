@@ -12,6 +12,8 @@
         <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding SaveProjectAsCommand}" />
         <KeyBinding Key="I" Modifiers="Control" Command="{Binding ImportFilesCommand}" />
         <KeyBinding Key="E" Modifiers="Control" Command="{Binding ExportCommand}" />
+        <KeyBinding Key="D" Modifiers="Control" Command="{Binding AddDefaultTransitionCommand}" />
+        <KeyBinding Key="T" Modifiers="Control+Shift" Command="{Binding AddTitleFromMenuCommand}" CommandParameter="Headline" />
         <KeyBinding Key="E" Modifiers="Control+Shift" Command="{Binding ExportStillCommand}" />
         <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
         <KeyBinding Key="Y" Modifiers="Control" Command="{Binding RedoCommand}" />
@@ -74,6 +76,15 @@
                 <Separator />
                 <MenuItem Header="_Quellband" IsCheckable="True" IsChecked="{Binding SourceTapeMode}" />
                 <MenuItem Header="_Doppel-Timeline" IsCheckable="True" IsChecked="{Binding ShowOverview}" />
+            </MenuItem>
+            <MenuItem Header="_Titel">
+                <MenuItem Header="Überschrift" InputGestureText="Strg+Umschalt+T" Command="{Binding AddTitleFromMenuCommand}" CommandParameter="Headline" />
+                <MenuItem Header="Untertitel" Command="{Binding AddTitleFromMenuCommand}" CommandParameter="Subtitle" />
+                <MenuItem Header="Bauchbinde (Name + Funktion)" Command="{Binding AddTitleFromMenuCommand}" CommandParameter="LowerThird" />
+                <MenuItem Header="Einblendung (Ort, Datum)" Command="{Binding AddTitleFromMenuCommand}" CommandParameter="Caption" />
+                <MenuItem Header="Abspann (rollend)" Command="{Binding AddTitleFromMenuCommand}" CommandParameter="Credits" />
+                <Separator />
+                <MenuItem Header="Kreuzblende am nächsten Schnitt" InputGestureText="Strg+D" Command="{Binding AddDefaultTransitionCommand}" />
             </MenuItem>
             <MenuItem Header="_Wiedergabe">
                 <MenuItem Header="Abspielen / Pause" InputGestureText="Leertaste" Click="OnPlayPause" />
@@ -267,6 +278,60 @@
                                     <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SourceText}" />
                                 </Grid>
 
+                                <StackPanel DataContext="{Binding Title}" Visibility="{Binding Converter={StaticResource NullToVisibility}}">
+                                    <TextBlock Text="Titel" Style="{StaticResource SectionHeader}" />
+                                    <TextBox Text="{Binding Text, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54"
+                                             ToolTip="Jede Zeile wird eine eigene Textzeile (Bauchbinde: 1. Zeile Name, 2. Zeile Funktion)" />
+                                    <Grid Margin="0,6,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                            <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Vorlage" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Column="1" Margin="0,2" ItemsSource="{Binding Source={x:Static vm:TitleViewModel.Styles}}" SelectedItem="{Binding Style}" />
+                                        <TextBlock Grid.Row="1" Text="Schrift" VerticalAlignment="Center" />
+                                        <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,2">
+                                            <CheckBox DockPanel.Dock="Right" Content="fett" IsChecked="{Binding Bold}" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                            <ComboBox ItemsSource="{Binding Source={x:Static vm:TitleViewModel.Fonts}}" SelectedItem="{Binding FontFamily}" />
+                                        </DockPanel>
+                                        <TextBlock Grid.Row="2" Text="Größe" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="2" Grid.Column="1" Margin="0,2" Minimum="2" Maximum="25" Value="{Binding SizePercent}" />
+                                        <TextBlock Grid.Row="3" Text="Farbe" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Row="3" Grid.Column="1" Margin="0,2" ItemsSource="{Binding Source={x:Static vm:TitleViewModel.Colors}}" SelectedItem="{Binding Color}" />
+                                        <TextBlock Grid.Row="4" Text="Kasten" VerticalAlignment="Center" />
+                                        <DockPanel Grid.Row="4" Grid.Column="1" Margin="0,2">
+                                            <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Box}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <Slider Minimum="0" Maximum="100" Value="{Binding BoxOpacity}" IsEnabled="{Binding Box}" ToolTip="Deckkraft des Kastens" />
+                                        </DockPanel>
+                                        <TextBlock Grid.Row="5" Text="Ausrichtung" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Row="5" Grid.Column="1" Margin="0,2" ItemsSource="{Binding Source={x:Static vm:TitleViewModel.Aligns}}" SelectedItem="{Binding Align}" />
+                                        <TextBlock Grid.Row="6" Text="Position X" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="6" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="100" Value="{Binding PositionX}" />
+                                        <TextBlock Grid.Row="7" Text="Position Y" VerticalAlignment="Center" />
+                                        <Slider Grid.Row="7" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="100" Value="{Binding PositionY}" />
+                                        <TextBlock Grid.Row="8" Text="Animation rein" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Row="8" Grid.Column="1" Margin="0,2" ItemsSource="{Binding Source={x:Static vm:TitleViewModel.Animations}}" SelectedItem="{Binding AnimationIn}" />
+                                        <TextBlock Grid.Row="9" Text="Animation raus" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Row="9" Grid.Column="1" Margin="0,2" ItemsSource="{Binding Source={x:Static vm:TitleViewModel.Animations}}" SelectedItem="{Binding AnimationOut}" />
+                                        <TextBlock Grid.Row="10" Text="Dauer (s)" VerticalAlignment="Center" />
+                                        <TextBox Grid.Row="10" Grid.Column="1" Margin="0,2" Text="{Binding AnimationSeconds, UpdateSourceTrigger=LostFocus}" />
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding IsVideoMediaClip, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Übergang vom vorherigen Clip" Style="{StaticResource SectionHeader}" />
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Right" Width="46" Margin="4,0,0,0" Text="{Binding TransitionSeconds, UpdateSourceTrigger=LostFocus}"
+                                                 IsEnabled="{Binding HasTransition}" ToolTip="Dauer in Sekunden" />
+                                        <ComboBox ItemsSource="{Binding Source={x:Static vm:ClipViewModel.TransitionChoices}}" SelectedItem="{Binding SelectedTransition}" />
+                                    </DockPanel>
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding IsMediaClip, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock Text="Geschwindigkeit" Style="{StaticResource SectionHeader}" />
                                 <ComboBox ItemsSource="{Binding SpeedChoices}" SelectedItem="{Binding SelectedSpeed}" />
                                 <Button Content="{Binding ConformText}" Margin="0,4,0,0" Padding="6,2" HorizontalAlignment="Left"
@@ -337,6 +402,7 @@
                                     <TextBlock Grid.Row="1" Text="Ausblenden" VerticalAlignment="Center" />
                                     <TextBox Grid.Row="1" Grid.Column="1" Margin="0,2" Text="{Binding FadeOutSeconds, UpdateSourceTrigger=LostFocus}" />
                                 </Grid>
+                                </StackPanel>
                             </StackPanel>
                         </Grid>
                     </ScrollViewer>
@@ -507,6 +573,9 @@
                     <Separator />
                     <ToggleButton Content="Doppel-Timeline" ToolTip="Übersicht der ganzen Timeline über der Detailansicht"
                                   IsChecked="{Binding ShowOverview}" />
+                    <Separator />
+                    <Button Content="+ Titel" Command="{Binding AddTitleFromMenuCommand}" CommandParameter="Headline" ToolTip="Titel am Abspielkopf (Strg+Umschalt+T)" />
+                    <Button Content="Blende" Command="{Binding AddDefaultTransitionCommand}" ToolTip="Kreuzblende am nächsten Schnitt (Strg+D)" />
                     <Separator />
                     <Button Content="+ Videospur" Command="{Binding AddVideoTrackCommand}" />
                     <Button Content="+ Tonspur" Command="{Binding AddAudioTrackCommand}" />

@@ -29,6 +29,20 @@ public sealed class ThumbnailService(MediaToolsService tools)
         return Decode(png);
     }
 
+    /// <summary>Ein Bild aus einem ffmpeg-Filter auf schwarzem Grund (z. B. Titel ohne Video darunter).</summary>
+    public async Task<BitmapSource?> RenderOnBlackAsync(int width, int height, string filter, CancellationToken token)
+    {
+        if (tools.Client is not { } client)
+        {
+            return null;
+        }
+
+        var png = await client.RunForBytesAsync(
+            ["-v", "error", "-f", "lavfi", "-i", $"color=c=black:s={width}x{height}:d=1", "-frames:v", "1", "-vf", filter,
+             "-f", "image2pipe", "-vcodec", "png", "-"], token).ConfigureAwait(false);
+        return Decode(png);
+    }
+
     private async Task<BitmapSource?> LoadAsync(string path, double seconds, int height, string? colorFilter)
     {
         if (tools.Client is not { } client)

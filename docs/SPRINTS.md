@@ -14,8 +14,8 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 | 6 | Medien-Arbeitsbereich: Ordner, Metadaten, Bild-Ton-Synchronisation | ✅ fertig |
 | 7 | Schnellschnitt-Arbeitsbereich: Doppel-Timeline, Quellband, Einfügemodi | ✅ fertig |
 | 8 | Profi-Schnitt: Trimm-Modi, Keyframes, Geschwindigkeitsrampen, verschachtelte Clips | ✅ fertig |
-| 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | ⏳ als Nächstes |
-| 10 | Mehrspur, Multicam & Mischmodi | geplant |
+| 9 | Übergänge & Titel (eigenes Titelwerkzeug, animiert) | ✅ fertig |
+| 10 | Mehrspur, Multicam & Mischmodi | ⏳ als Nächstes |
 | 11 | Farbe I: LUTs, HDR, Farbräder, Scopes, Farbabgleich 70D ↔ R6 | geplant |
 | 12 | Farbe II: Kurven, sekundäre Korrektur, Masken, Korrekturknoten, Tracking | geplant |
 | 13 | Ton I: Mischpult, Effekte, Lautheit, Ducking, Rauschminderung | geplant |
@@ -84,7 +84,7 @@ Der Plan wurde nach Sprint 4 von 9 auf 16 Sprints erweitert (ohne 3D-Animation).
 - Geschwindigkeitsrampen (fließende Zeitlupe)
 - Verschachtelte Clips (mehrere Clips zu einem zusammenfassen)
 
-## Sprint 9 – Übergänge & Titel
+## Sprint 9 – Übergänge & Titel ✅
 - Übergänge: Kreuzblende, Abblende Schwarz/Weiß, Wischblenden, Schieben, Kreis …
 - Eigenes Titelwerkzeug: Texte, Bauchbinden, Abspann; animiert (Einblenden, Schieben, Tippen)
 

@@ -403,6 +403,41 @@ public static class SmokeTest
         SaveScreenshot(window, Path.Combine(c.OutputFolder, "profischnitt.png"));
         clipCount = vm.Project.AllClips.Count();
 
+        // ---- Übergänge & Titel (Sprint 9)
+        vm.SelectedClipId = null;
+        var cutClip = vm.Project.VideoTracks.First().OrderedClips
+            .First(cl => cl.SourceIn > 0.6 && !cl.IsNested && vm.Project.VideoTracks.First().Clips.Any(p => p.EndFrame == cl.StartFrame));
+        vm.PlayheadFrame = cutClip.StartFrame + 2;
+        vm.AddDefaultTransition();
+        c.Check(vm.Project.FindClip(cutClip.Id)?.Clip.TransitionIn is { Type: Core.Timeline.TransitionType.Crossfade }, "Strg+D: Kreuzblende am Schnitt");
+        vm.SelectedClip!.SelectedTransition = ClipViewModel.TransitionChoices.First(t => t.Value == Core.Timeline.TransitionType.CircleOpen);
+        c.Check(vm.Project.FindClip(cutClip.Id)!.Value.Clip.TransitionIn!.Type == Core.Timeline.TransitionType.CircleOpen, "Übergangsart geändert");
+
+        vm.PlayheadFrame = cutClip.StartFrame - 10;
+        var lowerThird = vm.AddTitle("LowerThird");
+        vm.SelectedClip!.Title!.Text = "Max Mustermann\nKamera & Schnitt";
+        vm.SelectedClip.Title.Box = true;
+        c.Check(vm.Project.FindClip(lowerThird.Id)!.Value.Clip.Title!.Lines.Count == 2, "Bauchbinde mit zwei Zeilen");
+        vm.PlayheadFrame = lowerThird.StartFrame + 20;
+        c.Check(await program.RenderStillNowAsync(), "Standbild mit Titel " + program.MessageText);
+        program.Play(1);
+        await Settle(300);
+        var overlayLines = program.TitleOverlayCount;
+        var stillMode = program.IsStillMode;
+        program.Pause();
+        c.Check(overlayLines > 0 || stillMode, $"Titel beim Abspielen sichtbar ({overlayLines} Zeilen, Standbild-Modus: {stillMode})");
+        vm.PlayheadFrame = vm.Editor.Duration;
+        var credits = vm.AddTitle("Credits");
+        vm.PlayheadFrame = credits.StartFrame + 50;
+        c.Check(await program.RenderStillNowAsync(), "Abspann über Schwarz " + program.MessageText);
+
+        vm.Editor.SetMarks(Math.Max(0, cutClip.StartFrame - 30), cutClip.StartFrame + 40);
+        var titleJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("web-h264-1080")!, Path.Combine(exportFolder, "titel.mp4"), useRange: true);
+        await vm.ExportQueue.WaitAllAsync();
+        c.Check(titleJob.State == ExportJobState.Done, "Export mit Übergang und Titeln: " + titleJob.Detail);
+        SaveScreenshot(window, Path.Combine(c.OutputFolder, "titel.png"));
+        clipCount = vm.Project.AllClips.Count();
+
         // ---- Speichern & Laden
         var projectFile = Path.Combine(c.Temp, "Test.mvproj");
         c.Check(await vm.SaveToAsync(projectFile), "Projekt gespeichert");

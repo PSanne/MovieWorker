@@ -47,6 +47,7 @@ public sealed class TimelineView : FrameworkElement
     public const double HeaderWidth = 120;
     private double VideoTrackHeight => Compact ? 26 : 70;
     private double AudioTrackHeight => Compact ? 18 : 52;
+    private double TitleTrackHeight => Compact ? 16 : 34;
     private const double EdgeGrab = 7;
     private const double SnapPixels = 10;
 
@@ -82,6 +83,8 @@ public sealed class TimelineView : FrameworkElement
     private static readonly Brush VideoClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x3B, 0x6F, 0xB6)));
     private static readonly Brush AudioClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x2F, 0x8F, 0x5B)));
     private static readonly Brush NestedClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x7A, 0x55, 0xC2)));
+    private static readonly Brush TitleClipBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xC9, 0x6A, 0x1E)));
+    private static readonly Brush TransitionBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)));
     private static readonly Brush KeyframeBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xD2, 0x4A)));
     private static readonly Brush WaveBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xC0, 0xDD, 0xF5, 0xE6)));
     private static readonly Brush MarkBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x30, 0x7F, 0xB8, 0xFF)));
@@ -245,9 +248,14 @@ public sealed class TimelineView : FrameworkElement
         }
 
         var y = RulerHeight;
-        foreach (var track in Project.VideoTracks.Reverse().Concat(Project.AudioTracks))
+        foreach (var track in Project.TitleTracks.Concat(Project.VideoTracks.Reverse()).Concat(Project.AudioTracks))
         {
-            var height = track.Kind == TrackKind.Video ? VideoTrackHeight : AudioTrackHeight;
+            var height = track.Kind switch
+            {
+                TrackKind.Video => VideoTrackHeight,
+                TrackKind.Title => TitleTrackHeight,
+                _ => AudioTrackHeight,
+            };
             rows.Add(new TrackRow(track, y, height));
             y += height;
         }
@@ -418,7 +426,8 @@ public sealed class TimelineView : FrameworkElement
 
         var isVideo = row.Track.Kind == TrackKind.Video;
         dc.PushOpacity(ghostSource ? 0.35 : row.Track.Muted ? 0.45 : 1);
-        dc.DrawRoundedRectangle(clip.IsNested ? NestedClipBrush : isVideo ? VideoClipBrush : AudioClipBrush, ClipPen, rect, 3, 3);
+        var fill = clip.IsTitle ? TitleClipBrush : clip.IsNested ? NestedClipBrush : isVideo ? VideoClipBrush : AudioClipBrush;
+        dc.DrawRoundedRectangle(fill, ClipPen, rect, 3, 3);
         dc.PushClip(new RectangleGeometry(rect));
 
         // Vorschaubild am Clipanfang
@@ -454,8 +463,27 @@ public sealed class TimelineView : FrameworkElement
             DrawFade(dc, X(start + length - clip.FadeOutFrames), rect.Right, rect, fadeIn: false);
         }
 
+        // Übergang am Clipanfang: Fliege über dem Schnitt
+        if (clip.TransitionIn is { } transition && !Compact)
+        {
+            var tw = Math.Max(6, transition.DurationFrames * Viewport.PixelsPerFrame);
+            var bow = new StreamGeometry();
+            using (var g = bow.Open())
+            {
+                g.BeginFigure(new Point(rect.Left, rect.Top), true, true);
+                g.LineTo(new Point(rect.Left + tw, rect.Bottom), true, false);
+                g.LineTo(new Point(rect.Left + tw, rect.Top), true, false);
+                g.LineTo(new Point(rect.Left, rect.Bottom), true, false);
+            }
+
+            bow.Freeze();
+            dc.PushOpacity(0.45);
+            dc.DrawGeometry(TransitionBrush, null, bow);
+            dc.Pop();
+        }
+
         // Name und Kennzeichen
-        var label = clip.Name;
+        var label = clip.IsTitle ? "T  " + clip.Name : clip.Name;
         if (Math.Abs(clip.Speed - 1) > 1e-6)
         {
             label += $"  ×{clip.Speed.ToString("0.###", CultureInfo.CurrentCulture)}";
@@ -608,7 +636,10 @@ public sealed class TimelineView : FrameworkElement
             }
 
             DrawText(dc, row.Track.Name, new Point(8, row.Top + 6), 12, TextBrush, dpi, HeaderWidth - 40);
-            DrawText(dc, row.Track.Kind == TrackKind.Video ? "Video + Kameraton" : "Ton", new Point(8, row.Top + 24), 9, DimTextBrush, dpi, HeaderWidth - 12);
+            if (row.Track.Kind != TrackKind.Title)
+            {
+                DrawText(dc, row.Track.Kind == TrackKind.Video ? "Video + Kameraton" : "Ton", new Point(8, row.Top + 24), 9, DimTextBrush, dpi, HeaderWidth - 12);
+            }
             var mute = MuteRect(row);
             dc.DrawRoundedRectangle(row.Track.Muted ? MuteBrush : RulerBrush, ClipPen, mute, 3, 3);
             DrawText(dc, "M", new Point(mute.Left + 5, mute.Top + 2), 11, TextBrush, dpi, 20);

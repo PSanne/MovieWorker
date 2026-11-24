@@ -7,7 +7,7 @@ Es ist auf Material der **Canon EOS R6 Mark II** und der **Canon EOS 70D** zuges
 professionelle Videos machen: vom Import der Speicherkarte über den Schnitt bis zum Export als
 H.264/H.265 für YouTube oder als ProRes/DNxHR-Master.
 
-> **Stand: Sprint 8 von 16 abgeschlossen (Version 0.5 + Medien-Arbeitsbereich, Schnellschnitt, Profi-Schnitt).** Die erste voll nutzbare Version: importieren, schneiden,
+> **Stand: Sprint 9 von 16 abgeschlossen (Version 0.5 + Medien-Arbeitsbereich, Schnellschnitt, Profi-Schnitt, Übergänge & Titel).** Die erste voll nutzbare Version: importieren, schneiden,
 > abspielen und für YouTube, Instagram/TikTok oder als Master exportieren. Den kompletten Plan findest du in
 > **[docs/SPRINTS.md](docs/SPRINTS.md)**.
 
@@ -35,6 +35,8 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | **Timeline** | Clips per Doppelklick oder Ziehen aus dem Medienpool einfügen · verschieben (auch auf andere Spuren), an den Rändern trimmen · Einrasten an Schnittpunkten, Abspielkopf und Marken · Vorschaubilder und Ton-Wellenform in den Clips · Spuren hinzufügen und stummschalten |
 | **Schnellschnitt** | Fünf Schnittarten aus dem Quellmonitor: **Einfügen** (F9, alles dahinter rückt auf allen Spuren nach), **Überschreiben** (F10), **Ersetzen** (F11, gleiche Position und Länge), **Oben platzieren** (F12, B-Roll auf die nächste freie Videospur), **Anhängen** (Umschalt+F12) · **Quellband**: alle (gefilterten) Aufnahmen als ein durchgehendes Band durchsehen, In/Out setzen und schneiden · **Doppel-Timeline**: oben die ganze Timeline, unten der Ausschnitt zum Arbeiten |
 | **Profi-Schnitt** | **Trimm-Modi** (Auswahl „Ziehen:“ in der Timeline): *Ripple* (Rand trimmen, alles dahinter rückt nach), *Roll* (Schnittpunkt zwischen zwei Clips verschieben), *Slip* (anderer Ausschnitt bei gleicher Position), *Slide* (Clip zwischen Nachbarn verschieben) · **Keyframes** für Zoom, Position, Drehung, Deckkraft und Lautstärke – im Clip-Inspektor am Abspielkopf setzen (◆), springen (◀ ▶), zurücksetzen; weiche Übergänge; „Ken Burns“-Fahrten · **Geschwindigkeitsrampen** (Normal → Zeitlupe, Zeitlupe → Normal, Normal → Zeitlupe → Normal) · **Verschachteln** (In/Out-Bereich oder Clip zu einem Clip zusammenfassen) und wieder auflösen |
+| **Übergänge** | 14 Übergänge: Kreuzblende, Abblende über Schwarz/Weiß, Auflösen, Wischen (4 Richtungen), Schieben, Kreis öffnen/schließen, Uhrzeiger, Verpixeln · Strg+D setzt eine Kreuzblende an den nächsten Schnitt; Art und Länge im Clip-Inspektor · der zweite Clip blendet aus seinem Vorlauf über, die Schnittzeiten bleiben gleich |
+| **Titelwerkzeug** | Eigene Titelspur ganz oben · Vorlagen: Überschrift, Untertitel, **Bauchbinde** (Name + Funktion), Einblendung (Ort, Datum), **Abspann** (rollt) · Text mehrzeilig, Schrift, fett, Größe, Farbe, Kasten mit Deckkraft, Ausrichtung, Position · **Animationen**: Einblenden, von unten, von links, Schreibmaschine · beim Abspielen live im Monitor, im Stillstand und Export exakt über ffmpeg |
 | **Clip-Inspektor** | Position und Länge als Timecode · Geschwindigkeit (Zeitlupe/Zeitraffer) · „Als Zeitlupe abspielen“ für 150/180-fps-Clips · Lautstärke, Ton stumm, Ein-/Ausblenden |
 | **Monitore** | *Quelle*: Aufnahme ansehen, In/Out setzen, Ausschnitt ans Ende oder am Abspielkopf einfügen · *Programm*: Timeline abspielen; im Stillstand exaktes Standbild mit LUT/HDR-Umrechnung wie im Export · J/K/L-Shuttle |
 | **Proxys** | Für Aufnahmen, die Windows nicht flüssig abspielt (4K-HEVC 10 Bit 4:2:2, HDR, MOV mit LPCM), entsteht automatisch eine Vorschaudatei: 70D-Clips werden nur neu verpackt (Sekunden), R6-HEVC wird als 540p-H.264 kodiert, HDR dabei nach SDR umgerechnet · geteilte Aufnahmen ergeben einen Proxy · Menü *Wiedergabe → Vorschau mit Proxys* schaltet aufs Original um · der Export nutzt immer die Originale |
@@ -61,6 +63,7 @@ Ist die Erkennung unsicher, lässt sie sich von Hand festlegen.
 | Exportieren / Einzelbild | Strg+E / Strg+Umschalt+E |
 | Einfügen / Überschreiben / Ersetzen / Oben / Anhängen | F9 / F10 / F11 / F12 / Umschalt+F12 |
 | Trimm-Modus Normal / Ripple / Roll / Slip / Slide | A / B / R / Y / U |
+| Kreuzblende am Schnitt / neuer Titel | Strg+D / Strg+Umschalt+T |
 
 ## Funktionen des Kerns (Sprint 1)
 

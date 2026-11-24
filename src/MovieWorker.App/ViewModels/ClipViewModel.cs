@@ -31,7 +31,58 @@ public sealed partial class ClipViewModel : ObservableObject
             new(editor, clipId, AnimatedProperty.Opacity, "Deckkraft", "%", 0, 100, 100, playhead, setPlayhead),
         ];
         VolumeKeys = new(editor, clipId, AnimatedProperty.Volume, "Lautstärke", "dB", -60, 12, 0, playhead, setPlayhead);
+        Title = editor.Project.FindClip(clipId)?.Clip.Title is not null ? new TitleViewModel(editor, clipId) : null;
     }
+
+    /// <summary>Titelwerkzeug (nur bei Titel-Clips).</summary>
+    public TitleViewModel? Title { get; }
+
+    public bool IsTitle => Title is not null;
+
+    public bool IsMediaClip => !IsTitle;
+
+    public bool IsVideoMediaClip => IsVideoClip && !IsTitle;
+
+    // ------------------------------------------------------------ Übergang
+
+    public static IReadOnlyList<LabeledValue<TransitionType?>> TransitionChoices { get; } =
+        new LabeledValue<TransitionType?>[] { new(null, "Kein (harter Schnitt)") }
+            .Concat(Enum.GetValues<TransitionType>().Select(t => new LabeledValue<TransitionType?>(t, Transition.Label(t))))
+            .ToList();
+
+    public LabeledValue<TransitionType?> SelectedTransition
+    {
+        get => TransitionChoices.First(t => t.Value == Clip.TransitionIn?.Type);
+        set
+        {
+            if (value is null || value.Value == Clip.TransitionIn?.Type)
+            {
+                return;
+            }
+
+            _editor.SetTransition(ClipId, value.Value is { } type
+                ? new Transition { Type = type, DurationFrames = Clip.TransitionIn?.DurationFrames ?? Rate.NominalFps }
+                : null);
+        }
+    }
+
+    public double TransitionSeconds
+    {
+        get => Math.Round(Rate.FramesToSeconds(Clip.TransitionIn?.DurationFrames ?? Rate.NominalFps), 2);
+        set
+        {
+            if (Clip.TransitionIn is { } transition)
+            {
+                _editor.SetTransition(ClipId, new Transition
+                {
+                    Type = transition.Type,
+                    DurationFrames = Math.Max(1, Rate.SecondsToFrames(Math.Clamp(value, 0.04, 10))),
+                });
+            }
+        }
+    }
+
+    public bool HasTransition => Clip.TransitionIn is not null;
 
     /// <summary>Bewegung: Zoom, Position, Drehung, Deckkraft – je mit Keyframes.</summary>
     public IReadOnlyList<AnimatedValueViewModel> Motion { get; }
@@ -169,6 +220,7 @@ public sealed partial class ClipViewModel : ObservableObject
     public void Refresh()
     {
         OnPropertyChanged(string.Empty);
+        Title?.Refresh();
         RefreshMotion();
     }
 
