@@ -904,6 +904,38 @@ public sealed class TimelineEditor
         });
     }
 
+    /// <summary>Legt einen Titel an (auf der ersten Titelspur, bei Bedarf auf einer neuen).</summary>
+    public TimelineClip AddTitle(TitleSpec spec, long start, long lengthFrames)
+    {
+        var clip = new TimelineClip
+        {
+            Name = spec.Lines.FirstOrDefault() ?? "Titel",
+            Title = spec,
+            HasVideo = true,
+            HasAudio = false,
+            LengthFrames = Math.Max(1, lengthFrames),
+            SourceDuration = double.MaxValue / 4,
+        };
+        Modify("Titel einfügen", p =>
+        {
+            var track = p.TitleTracks.FirstOrDefault(t => t.IsFree(start, clip.LengthFrames));
+            if (track is null)
+            {
+                track = new TimelineTrack { Kind = TrackKind.Title, Name = $"T{p.TitleTracks.Count() + 1} Titel" };
+                p.Tracks.Insert(0, track);
+            }
+
+            clip.StartFrame = start;
+            track.Clips.Add(clip);
+            return true;
+        });
+        return clip;
+    }
+
+    /// <summary>Setzt den Übergang am Anfang eines Clips (null = harter Schnitt).</summary>
+    public bool SetTransition(Guid clipId, Transition? transition) =>
+        UpdateClip(clipId, transition is null ? "Übergang entfernen" : "Übergang", c => c.TransitionIn = transition?.Clone());
+
     /// <summary>Spur stumm/aktiv schalten.</summary>
     public bool SetTrackMuted(Guid trackId, bool muted) =>
         Modify(muted ? "Spur stumm" : "Spur aktiv", p =>

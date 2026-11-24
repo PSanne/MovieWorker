@@ -40,7 +40,7 @@ public class ExportTests
         Assert.Contains("-ss 5 -t 10 -i /card/DCIM/100CANON/MVI_0001.MOV", args);
         Assert.Contains("color=c=black:s=3840x2160", graph);                 // Lücke 250..500
         Assert.Contains("lut3d=file='C\\:/LUTs/Canon Log3.cube'", graph);    // maskierter Windows-Pfad
-        Assert.Contains("concat=n=3:v=1:a=1[vcat][acam]", graph);
+        Assert.Contains("concat=n=3:v=1:a=1[vjoin][acam]", graph);
         Assert.Contains("volume=-6dB", graph);
         Assert.Contains("amix=inputs=2", graph);
         Assert.Contains("prores_ks", args);

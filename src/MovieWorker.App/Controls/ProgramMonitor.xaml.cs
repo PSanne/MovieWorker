@@ -57,6 +57,9 @@ public partial class ProgramMonitor : UserControl
 
     public ImageSource? CurrentStill => Still.Source;
 
+    /// <summary>Hinweistext im Monitor (z. B. Fehlermeldung der Vorschau) – für den Selbsttest.</summary>
+    public string MessageText => Message.Text;
+
     public void Attach(MainViewModel vm)
     {
         _vm = vm;
@@ -419,7 +422,7 @@ public partial class ProgramMonitor : UserControl
         try
         {
             var dpi = VisualTreeHelper.GetDpi(this).DpiScaleY;
-            var height = (int)Math.Clamp(Screen.ActualHeight * dpi, 180, 1080);
+            var height = (int)Math.Clamp(Screen.ActualHeight * dpi, 180, 1080) / 2 * 2;
             var image = await _vm.Thumbnails.RenderAsync(source.OriginalPath, source.OriginalSeconds, height,
                 PlaybackPlanner.PreviewFilter(project, source, _vm.PlayheadFrame, height), token);
             if (token.IsCancellationRequested || (IsPlaying && !_stillMode))

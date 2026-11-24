@@ -9,6 +9,9 @@ public enum TrackKind
 {
     Video,
     Audio,
+
+    /// <summary>Titelspur: Texte über dem Bild (liegt immer ganz oben).</summary>
+    Title,
 }
 
 /// <summary>Wie die Farben eines Clips für den Export umgerechnet werden.</summary>
@@ -132,6 +135,15 @@ public sealed class TimelineClip
     /// <summary>Keyframes je Eigenschaft (Bilder relativ zum Clipanfang).</summary>
     public List<KeyframeTrack> Keyframes { get; set; } = [];
 
+    /// <summary>Übergang vom vorherigen Clip zu diesem (null = harter Schnitt).</summary>
+    public Transition? TransitionIn { get; set; }
+
+    /// <summary>Titel (nur auf Titelspuren).</summary>
+    public TitleSpec? Title { get; set; }
+
+    [JsonIgnore]
+    public bool IsTitle => Title is not null;
+
     /// <summary>Verschachtelter Clip: enthält eigene Spuren (null = normaler Clip).</summary>
     public List<TimelineTrack>? NestedTracks { get; set; }
 
@@ -226,6 +238,8 @@ public sealed class TimelineClip
         copy.Transform = Transform.Clone();
         copy.Keyframes = Keyframes.Select(k => k.Clone()).ToList();
         copy.NestedTracks = NestedTracks?.Select(t => t.Clone()).ToList();
+        copy.TransitionIn = TransitionIn?.Clone();
+        copy.Title = Title?.Clone();
         return copy;
     }
 }
@@ -294,6 +308,9 @@ public sealed class MovieProject
 
     [JsonIgnore]
     public IEnumerable<TimelineTrack> AudioTracks => Tracks.Where(t => t.Kind == TrackKind.Audio);
+
+    [JsonIgnore]
+    public IEnumerable<TimelineTrack> TitleTracks => Tracks.Where(t => t.Kind == TrackKind.Title);
 
     [JsonIgnore]
     public long DurationFrames => Tracks.SelectMany(t => t.Clips).Select(c => c.EndFrame).DefaultIfEmpty(0).Max();

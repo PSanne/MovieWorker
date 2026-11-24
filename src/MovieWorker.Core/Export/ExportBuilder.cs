@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using MovieWorker.Core.Timeline;
+using ClipHandles = MovieWorker.Core.Timeline.ClipHandlesAccess;
 
 namespace MovieWorker.Core.Export;
 
@@ -52,29 +53,48 @@ public static class ExportBuilder
         var inputs = new List<string>();
         var graph = new StringBuilder();
         var inputIndex = 0;
-        var segmentLabels = new List<string>();
+        var segments = new List<(int Index, long Length, long Transition, string Type)>();
 
         // ---------- Videospur V1 mit Kameraton ----------
         var videoTrack = project.VideoTracks.FirstOrDefault() ?? new TimelineTrack { Kind = TrackKind.Video };
         long cursor = 0;
         var segment = 0;
-        foreach (var clip in videoTrack.OrderedClips.Where(c => c.SourcePaths.Count > 0 && c.HasVideo).Append(null))
+        foreach (var originalClip in videoTrack.OrderedClips.Where(c => c.SourcePaths.Count > 0 && c.HasVideo).Append(null))
         {
+            var clip = originalClip;
             var gapEnd = clip?.StartFrame ?? totalFrames;
             if (gapEnd > cursor)
             {
                 var gap = FfmpegArgs.Seconds(rate.FramesToSeconds(gapEnd - cursor));
                 graph.Append(CultureInfo.InvariantCulture,
-                    $"color=c=black:s={width}x{height}:r={rate.ToFfmpeg()}:d={gap},format={pixelFormat},setsar=1[v{segment}];");
+                    $"color=c=black:s={width}x{height}:r={rate.ToFfmpeg()}:d={gap},format={pixelFormat},setsar=1,settb=AVTB[v{segment}];");
                 graph.Append(CultureInfo.InvariantCulture,
                     $"anullsrc=r=48000:cl=stereo,atrim=duration={gap}[a{segment}];");
-                segmentLabels.Add($"[v{segment}][a{segment}]");
+                segments.Add((segment, gapEnd - cursor, 0, string.Empty));
                 segment++;
             }
 
             if (clip is null)
             {
                 break;
+            }
+
+            // Übergang: der Clip beginnt um die Übergangslänge früher (Vorlauf aus seinem Material) und
+            // wird über das Ende des vorherigen Abschnitts geblendet – die Schnittzeiten bleiben gleich.
+            var transition = 0L;
+            var timelineClip = clip;
+            if (clip.TransitionIn is { DurationFrames: > 0 } t && segments.Count > 0)
+            {
+                transition = Math.Min(Math.Min(t.DurationFrames, segments[^1].Length - 1), ClipHandles.Head(clip, rate));
+                if (transition > 0)
+                {
+                    clip = clip.Clone();
+                    clip.SourceIn -= rate.FramesToSeconds(transition) * clip.Speed;
+                    clip.StartFrame -= transition;
+                    clip.LengthFrames += transition;
+                    clip.ShiftKeyframes(transition);
+                    clip.FadeInFrames = 0;
+                }
             }
 
             var duration = rate.FramesToSeconds(clip.LengthFrames);
@@ -109,6 +129,7 @@ public static class ExportBuilder
             }
 
             vf.Add($"format={pixelFormat}");
+            vf.Add("settb=AVTB");
             graph.Append(CultureInfo.InvariantCulture, $"{videoIn}{string.Join(',', vf)}[v{segment}];");
 
             // Kameraton
@@ -127,13 +148,24 @@ public static class ExportBuilder
                 graph.Append(CultureInfo.InvariantCulture, $"anullsrc=r=48000:cl=stereo,atrim=duration={durationText}[a{segment}];");
             }
 
-            segmentLabels.Add($"[v{segment}][a{segment}]");
+            segments.Add((segment, timelineClip.LengthFrames, transition,
+                transition > 0 ? Transition.FfmpegName(timelineClip.TransitionIn!.Type) : string.Empty));
             segment++;
-            cursor = clip.EndFrame;
+            cursor = timelineClip.EndFrame;
         }
 
-        graph.Append(CultureInfo.InvariantCulture,
-            $"{string.Concat(segmentLabels)}concat=n={segmentLabels.Count}:v=1:a=1[vcat][acam];");
+        JoinSegments(graph, segments, rate);
+
+        // ---------- Titel ----------
+        var titles = TitleRenderer.Filters(project, width, height);
+        if (titles.Count > 0)
+        {
+            graph.Append(CultureInfo.InvariantCulture, $"[vjoin]{string.Join(',', titles)}[vcat];");
+        }
+        else
+        {
+            graph.Append("[vjoin]null[vcat];");
+        }
 
         // ---------- Ausgabeformat (Hochformat, Quadrat …) und Bildrate ----------
         var outputRate = OutputFrameRate(rate, preset);
@@ -199,6 +231,76 @@ public static class ExportBuilder
         args.AddRange(preset.AudioArguments);
         args.AddRange(["-ar", "48000", "-progress", "pipe:1", "-nostats", outputPath]);
         return new FfmpegJob(args, rate.FramesToSeconds(totalFrames), outputPath);
+    }
+
+    /// <summary>
+    /// Fügt die Abschnitte der Hauptspur zusammen: ohne Übergang per <c>concat</c>, mit Übergang per
+    /// <c>xfade</c> (Bild) und <c>acrossfade</c> (Ton). Ergebnis: [vjoin] und [acam].
+    /// </summary>
+    private static void JoinSegments(StringBuilder graph, List<(int Index, long Length, long Transition, string Type)> segments, Time.FrameRate rate)
+    {
+        var pending = new List<(string V, string A)> { ($"[v{segments[0].Index}]", $"[a{segments[0].Index}]") };
+        var total = segments[0].Length;
+        var step = 0;
+
+        (string V, string A) Flush(string? targetV = null, string? targetA = null)
+        {
+            if (pending.Count == 1 && targetV is null)
+            {
+                return pending[0];
+            }
+
+            var v = targetV ?? $"[jv{step}]";
+            var a = targetA ?? $"[ja{step}]";
+            step++;
+            if (pending.Count == 1)
+            {
+                graph.Append(CultureInfo.InvariantCulture, $"{pending[0].V}null{v};{pending[0].A}anull{a};");
+            }
+            else
+            {
+                graph.Append(CultureInfo.InvariantCulture,
+                    $"{string.Concat(pending.Select(p => p.V + p.A))}concat=n={pending.Count}:v=1:a=1{v}{a};");
+            }
+
+            return (v, a);
+        }
+
+        foreach (var seg in segments.Skip(1))
+        {
+            var next = ($"[v{seg.Index}]", $"[a{seg.Index}]");
+            if (seg.Transition <= 0)
+            {
+                pending.Add(next);
+                total += seg.Length;
+                continue;
+            }
+
+            var (curV, curA) = Flush();
+            var d = FfmpegArgs.Seconds(rate.FramesToSeconds(seg.Transition));
+            var offset = FfmpegArgs.Seconds(rate.FramesToSeconds(total - seg.Transition));
+            var xv = $"[xv{step}]";
+            var xa = $"[xa{step}]";
+            step++;
+            graph.Append(CultureInfo.InvariantCulture,
+                $"{curV}{next.Item1}xfade=transition={seg.Type}:duration={d}:offset={offset}{xv};");
+            graph.Append(CultureInfo.InvariantCulture, $"{curA}{next.Item2}acrossfade=d={d}:c1=tri:c2=tri{xa};");
+            pending = [(xv, xa)];
+            total += seg.Length;
+        }
+
+        if (pending.Count == 1 && segments.Count == 1)
+        {
+            graph.Append(CultureInfo.InvariantCulture, $"{pending[0].V}null[vjoin];{pending[0].A}anull[acam];");
+        }
+        else if (pending.Count == 1)
+        {
+            graph.Append(CultureInfo.InvariantCulture, $"{pending[0].V}null[vjoin];{pending[0].A}anull[acam];");
+        }
+        else
+        {
+            Flush("[vjoin]", "[acam]");
+        }
     }
 
     /// <summary>Endgültige Größe der exportierten Datei.</summary>

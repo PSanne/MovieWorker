@@ -32,3 +32,11 @@ internal static class ClipHandles
     public static long Tail(TimelineClip clip, Time.FrameRate rate) =>
         (long)Math.Floor(Math.Max(0, clip.SourceDuration - clip.SourceOut(rate)) / clip.Speed / rate.FrameDuration + 1e-6);
 }
+
+/// <summary>Öffentlicher Zugang zu den Clip-Reserven (für den Export).</summary>
+public static class ClipHandlesAccess
+{
+    public static long Head(TimelineClip clip, Time.FrameRate rate) => ClipHandles.Head(clip, rate);
+
+    public static long Tail(TimelineClip clip, Time.FrameRate rate) => ClipHandles.Tail(clip, rate);
+}

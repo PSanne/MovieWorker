@@ -376,7 +376,7 @@ public static class SmokeTest
         zoom.Value = 140;
         c.Check(Live(left).KeyframesFor(Core.Timeline.AnimatedProperty.Scale)?.Keys.Count == 2, "Zoom-Keyframes (Ken Burns)");
         vm.PlayheadFrame = Live(left).StartFrame + 10;
-        c.Check(await program.RenderStillNowAsync(), "Standbild mit Keyframe-Zoom");
+        c.Check(await program.RenderStillNowAsync(), "Standbild mit Keyframe-Zoom " + program.MessageText);
         var vol = vm.SelectedClip.VolumeKeys;
         vol.ToggleKeyCommand.Execute(null);
         c.Check(Live(left).IsAnimated(Core.Timeline.AnimatedProperty.Volume), "Lautstärke-Keyframe");
@@ -393,7 +393,7 @@ public static class SmokeTest
         var nestedClip = vm.Project.AllClips.FirstOrDefault(cl => cl.IsNested);
         c.Check(nestedClip is not null && nestedClip.Name == "Szene A", "Verschachteln");
         vm.PlayheadFrame = nestedClip!.StartFrame + 5;
-        c.Check(await program.RenderStillNowAsync(), "Vorschau zeigt Inhalt des verschachtelten Clips");
+        c.Check(await program.RenderStillNowAsync(), "Vorschau zeigt Inhalt des verschachtelten Clips " + program.MessageText);
         var nestJob = vm.EnqueueExport(MovieWorker.Core.Export.ExportPreset.Find("web-h264-1080")!, Path.Combine(exportFolder, "verschachtelt.mp4"), useRange: true);
         await vm.ExportQueue.WaitAllAsync();
         c.Check(nestJob.State == ExportJobState.Done, "Export mit Keyframes und Verschachtelung: " + nestJob.Detail);

@@ -59,6 +59,7 @@ public static class PlaybackPlanner
     /// </summary>
     public static string? PreviewFilter(MovieProject project, PlaybackSource source, long frame, int height)
     {
+        height = Math.Max(2, height / 2 * 2); // gerade Höhe – 4:2:0-Material verträgt keine ungeraden Maße
         var settings = project.Settings;
         var width = Math.Max(2, (int)Math.Round(settings.Width * (double)height / settings.Height / 2) * 2);
         var filters = new List<string>();
@@ -67,7 +68,8 @@ public static class PlaybackPlanner
             filters.Add(color);
         }
 
-        if (!source.Clip.HasTransform)
+        var titles = TitleRenderer.StaticAt(project, frame, width, height);
+        if (!source.Clip.HasTransform && titles.Count == 0)
         {
             return filters.Count == 0 ? null : string.Join(',', filters);
         }
@@ -75,7 +77,18 @@ public static class PlaybackPlanner
         filters.Add($"scale={width}:{height}:force_original_aspect_ratio=decrease");
         filters.Add($"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2");
         filters.AddRange(TransformFilters.StaticAt(source.Clip, frame - source.Clip.StartFrame, width, height));
+        filters.AddRange(titles);
         return string.Join(',', filters);
+    }
+
+    /// <summary>Titel über schwarzem Bild (für Stellen ohne Video) – null, wenn dort auch kein Titel ist.</summary>
+    public static string? TitleOnlyFilter(MovieProject project, long frame, int height)
+    {
+        height = Math.Max(2, height / 2 * 2);
+        var settings = project.Settings;
+        var width = Math.Max(2, (int)Math.Round(settings.Width * (double)height / settings.Height / 2) * 2);
+        var titles = TitleRenderer.StaticAt(project, frame, width, height);
+        return titles.Count == 0 ? null : $"scale={width}:{height}," + string.Join(',', titles);
     }
 
     private static PlaybackSource Source(MovieProject project, TimelineTrack track, TimelineClip clip, long frame)
